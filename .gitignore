@@ -39,3 +39,5 @@ htmlcov/
 *.local
 .env.local
 config.local.*
+
+FNER_Scoring_2 Rounds.pdf
