@@ -1,10 +1,12 @@
 import { useGameStore } from './store/gameStore';
 import { MainLayout } from './components/layout/MainLayout';
 import { GameOverOverlay } from './components/shared/GameOverOverlay';
+import { HistoryView } from './components/history/HistoryView';
+import { ErrorBoundary } from './components/shared/ErrorBoundary';
 import { StartScreen } from './components/shared/StartScreen';
 
 function App() {
-  const { state, error, clearError } = useGameStore();
+  const { state, replay, error, clearError } = useGameStore();
 
   // No active game — show start screen
   if (!state) {
@@ -15,6 +17,7 @@ function App() {
     <>
       <MainLayout />
       {state.is_finished && <GameOverOverlay />}
+      {replay && <HistoryView />}
       {/* Error toast */}
       {error && (
         <div className="fixed top-4 right-4 bg-red-900/90 border border-red-700 rounded-lg px-4 py-3 max-w-md z-50">
@@ -30,4 +33,12 @@ function App() {
   );
 }
 
-export default App;
+function AppWithBoundary() {
+  return (
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}
+
+export default AppWithBoundary;

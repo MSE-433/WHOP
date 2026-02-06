@@ -1,9 +1,19 @@
 import { useGameStore } from '../../store/gameStore';
 import { formatCurrency } from '../../utils/formatters';
+import * as api from '../../api/client';
 
 export function GameOverOverlay() {
-  const { state, endGame } = useGameStore();
+  const { state, gameId, endGame, fetchReplay } = useGameStore();
   if (!state || !state.is_finished) return null;
+
+  const handleExportCSV = async () => {
+    if (!gameId) return;
+    try {
+      await api.exportCSV(gameId);
+    } catch {
+      // non-critical
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
@@ -51,6 +61,21 @@ export function GameOverOverlay() {
             </table>
           </div>
         )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={handleExportCSV}
+            className="flex-1 py-3 bg-green-700 hover:bg-green-600 rounded-lg font-medium transition-colors cursor-pointer"
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={fetchReplay}
+            className="flex-1 py-3 bg-purple-700 hover:bg-purple-600 rounded-lg font-medium transition-colors cursor-pointer"
+          >
+            View History
+          </button>
+        </div>
 
         <button
           onClick={endGame}

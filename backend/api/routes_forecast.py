@@ -19,7 +19,16 @@ router = APIRouter(prefix="/api/game", tags=["forecast"])
 
 @router.get("/{game_id}/forecast")
 def forecast(game_id: str, horizon: int | None = None):
-    """Run Monte Carlo forecast with metrics."""
+    """Run Monte Carlo forecast with comprehensive metrics.
+
+    Args:
+        game_id: UUID of the game session.
+        horizon: Number of rounds to look ahead (default from settings).
+
+    Returns:
+        JSON with monte_carlo results, utilization, capacity_forecast,
+        bottlenecks, diversion_roi, and staff_efficiency analysis.
+    """
     state = _load_or_404(game_id)
     h = horizon or settings.default_forecast_horizon
 
@@ -47,7 +56,18 @@ def forecast(game_id: str, horizon: int | None = None):
 
 @router.get("/{game_id}/optimize")
 def optimize(game_id: str, horizon: int | None = None, mc_sims: int | None = None):
-    """Run optimizer for current step."""
+    """Run optimizer to generate and rank candidate actions for the current step.
+
+    Uses 2-phase scoring: fast deterministic pruning, then Monte Carlo on top candidates.
+
+    Args:
+        game_id: UUID of the game session.
+        horizon: Lookahead rounds (default from settings).
+        mc_sims: Number of Monte Carlo simulations (default from settings).
+
+    Returns:
+        OptimizationResult with ranked candidates, baseline cost, and horizon used.
+    """
     state = _load_or_404(game_id)
     h = horizon or settings.default_forecast_horizon
     sims = mc_sims or settings.default_mc_simulations

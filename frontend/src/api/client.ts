@@ -4,6 +4,7 @@ import type {
   NewGameResponse,
   HistoryResponse,
   RecommendationResponse,
+  ReplayResponse,
   ArrivalsAction,
   ExitsAction,
   ClosedAction,
@@ -77,5 +78,22 @@ export async function getRecommendation(
   step: StepType,
 ): Promise<RecommendationResponse> {
   const { data } = await api.get<RecommendationResponse>(`/${gameId}/recommend/${step}`);
+  return data;
+}
+
+export async function exportCSV(gameId: string): Promise<void> {
+  const { data } = await api.get(`/${gameId}/export/csv`, { responseType: 'blob' });
+  const url = window.URL.createObjectURL(new Blob([data], { type: 'text/csv' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `whop_game_${gameId.slice(0, 8)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function getReplay(gameId: string): Promise<ReplayResponse> {
+  const { data } = await api.get<ReplayResponse>(`/${gameId}/replay`);
   return data;
 }

@@ -76,3 +76,17 @@ def list_sessions(conn: sqlite3.Connection) -> list[dict]:
     """List all sessions."""
     rows = conn.execute("SELECT * FROM sessions ORDER BY created_at DESC").fetchall()
     return [dict(r) for r in rows]
+
+
+def get_round_snapshots(conn: sqlite3.Connection, game_id: str) -> list[GameState]:
+    """Get one snapshot per completed round (the paperwork-step snapshot = end-of-round state).
+
+    Returns GameState objects ordered by round number.
+    """
+    rows = conn.execute(
+        "SELECT state_json FROM state_snapshots "
+        "WHERE game_id=? AND step='paperwork' "
+        "ORDER BY round_number ASC",
+        (game_id,),
+    ).fetchall()
+    return [GameState.model_validate_json(row["state_json"]) for row in rows]

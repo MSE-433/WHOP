@@ -23,6 +23,17 @@ Key cost rules:
 - Surgery/CC/SD arrivals waiting: $3,750 financial + $20 quality per patient per round
 - Surgery/CC/SD requests waiting: $0 financial + $20 quality per request per round
 
+Strategic heuristics (internalize these):
+- Diversion is RARELY worth it: break-even is ~34 rounds of waiting at $150/round, \
+but the game is only 24 rounds. Avoid diversion unless ER is overwhelmed with 5+ waiting.
+- Extra staff is almost ALWAYS worth it: $40/round is trivial vs $3,750 for one \
+waiting Surgery/CC/SD arrival. Call extra staff proactively for hard-cap departments.
+- Prioritize admitting Surgery/CC/SD arrivals over ER: the cost difference is 25x \
+($3,750 vs $150 per waiting patient per round). ER waiting is cheap.
+- Transfer requests cost $0 financial + $20 quality — low priority compared to arrivals.
+- Beds in Surgery (9 cap) and CC (18 cap) are the main bottleneck. Plan transfers \
+to free beds before arrivals hit.
+
 Key constraints:
 - 1:1 staff-to-patient binding; staff with patients cannot transfer
 - Transfer requests take 1 round delay
@@ -31,9 +42,12 @@ Key constraints:
 - "Closed" is communication only (does not stop arrivals)
 - ER "Divert" stops ambulance arrivals next round but costs $5,000+$200 per diversion
 
-You must respond with valid JSON matching the schema provided. Include a \
-"reasoning" field explaining your recommendation and an "action" field \
-with the specific action to take.\
+You MUST respond with valid JSON ONLY — no text before or after the JSON object. \
+Include a "reasoning" field explaining your recommendation and an "action" field \
+with the specific action to take.
+
+IMPORTANT: Your entire response must be a single valid JSON object. No markdown, \
+no code fences, no explanation outside the JSON.\
 """
 
 
@@ -57,15 +71,25 @@ def build_user_prompt(
 
 
 def _format_situation(state: GameState) -> str:
-    """Current round, step, and cumulative costs."""
-    return (
-        f"## Current Situation\n"
-        f"- Round: {state.round_number}/24\n"
-        f"- Current step: {state.current_step.value}\n"
-        f"- Total financial cost so far: ${state.total_financial_cost:,}\n"
-        f"- Total quality cost so far: ${state.total_quality_cost:,}\n"
-        f"- Combined cost: ${state.total_financial_cost + state.total_quality_cost:,}"
-    )
+    """Current round, step, cumulative costs, and recent cost trend."""
+    lines = [
+        f"## Current Situation",
+        f"- Round: {state.round_number}/24",
+        f"- Current step: {state.current_step.value}",
+        f"- Total financial cost so far: ${state.total_financial_cost:,}",
+        f"- Total quality cost so far: ${state.total_quality_cost:,}",
+        f"- Combined cost: ${state.total_financial_cost + state.total_quality_cost:,}",
+    ]
+
+    # Recent cost trend (last 3 rounds)
+    if state.round_costs:
+        recent = state.round_costs[-3:]
+        trend_parts = []
+        for rc in recent:
+            trend_parts.append(f"R{rc.round_number}: ${rc.financial + rc.quality:,}")
+        lines.append(f"- Recent cost trend: {' → '.join(trend_parts)}")
+
+    return "\n".join(lines)
 
 
 def _format_department_summary(state: GameState) -> str:
@@ -120,7 +144,7 @@ def _format_bottlenecks(state: GameState) -> str:
 
 
 def _format_candidates(optimization: OptimizationResult) -> str:
-    """Show the optimizer's ranked candidates."""
+    """Show the optimizer's ranked candidates with uncertainty ranges."""
     if not optimization.candidates:
         return "## Optimizer Candidates\nNo candidates generated."
     lines = [
@@ -130,7 +154,8 @@ def _format_candidates(optimization: OptimizationResult) -> str:
         delta = f"+${c.delta_vs_baseline:,.0f}" if c.delta_vs_baseline >= 0 else f"-${abs(c.delta_vs_baseline):,.0f}"
         lines.append(
             f"{i}. **{c.description}** (expected: ${c.expected_total:,.0f}, "
-            f"delta: {delta})\n   {c.reasoning}"
+            f"delta: {delta}, range: ${c.p10_total:,.0f}–${c.p90_total:,.0f})\n"
+            f"   {c.reasoning}"
         )
     return "\n".join(lines)
 
@@ -142,12 +167,14 @@ def _format_step_constraints(state: GameState, step: StepType) -> str:
     if step == StepType.ARRIVALS:
         lines.append("You decide how many waiting patients to admit and which transfer requests to accept.")
         lines.append("Constraints: need 1 idle staff per admission, hard-cap depts need available beds.")
+        lines.append("PRIORITY: Admit Surgery/CC/SD first ($3,750/round) — ER waiting is cheap ($150/round).")
         for dept_id, dept in state.departments.items():
             if dept.arrivals_waiting > 0 or dept.total_requests_waiting > 0:
+                bed_info = f"{dept.beds_available} beds" if dept.bed_capacity is not None else "unlimited beds"
                 lines.append(
                     f"- {dept_id.value.upper()}: {dept.arrivals_waiting} waiting, "
                     f"{dept.total_requests_waiting} transfer requests, "
-                    f"{dept.staff.total_idle} idle staff, {dept.beds_available} beds"
+                    f"{dept.staff.total_idle} idle staff, {bed_info}"
                 )
 
     elif step == StepType.EXITS:
@@ -156,15 +183,22 @@ def _format_step_constraints(state: GameState, step: StepType) -> str:
 
     elif step == StepType.CLOSED:
         lines.append("You can close/open departments (communication only) or divert ER ambulances.")
+        # Show occupancy % for each dept
+        for dept_id, dept in state.departments.items():
+            if dept.bed_capacity is not None:
+                pct = int(dept.total_patients / dept.bed_capacity * 100)
+                lines.append(f"- {dept_id.value.upper()}: {pct}% occupancy ({dept.total_patients}/{dept.bed_capacity} beds)")
+            else:
+                lines.append(f"- {dept_id.value.upper()}: {dept.total_patients} patients (unlimited beds)")
         if state.round_number < 24:
             amb = get_er_ambulance(state.round_number + 1)
             lines.append(f"Next round has {amb} ambulance arrivals.")
         lines.append("Diversion costs $5,000 + $200/quality per ambulance diverted.")
-        lines.append("Diversion is rarely financially optimal (break-even ~34 waiting rounds).")
+        lines.append("Diversion is RARELY financially optimal (break-even ~34 waiting rounds).")
 
     elif step == StepType.STAFFING:
         lines.append("You can call extra staff, return extra staff, or transfer idle staff between departments.")
-        lines.append("Extra staff cost $40 financial + $5 quality per round.")
+        lines.append("Extra staff cost $40 financial + $5 quality per round — almost always worth it for hard-cap depts.")
         for dept_id, dept in state.departments.items():
             lines.append(
                 f"- {dept_id.value.upper()}: {dept.staff.total_idle} idle, "
@@ -226,4 +260,9 @@ def _format_json_schema(step: StepType) -> str:
     }
 
     schema = schemas.get(step, '{"reasoning": "string", "action": {}}')
-    return f"## Required JSON Output\nRespond ONLY with valid JSON matching this schema:\n```json\n{schema}\n```"
+    return (
+        f"## Required JSON Output\n"
+        f"Respond ONLY with valid JSON matching this schema (no markdown, no code fences):\n"
+        f"```json\n{schema}\n```\n\n"
+        f"REMINDER: Output ONLY the JSON object. No other text."
+    )

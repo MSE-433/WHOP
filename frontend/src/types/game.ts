@@ -138,6 +138,32 @@ export interface HistoryResponse {
   total_quality_cost: number;
 }
 
+// --- Replay ---
+export interface ReplayDepartment {
+  patients: number;
+  beds_available: number;
+  staff_idle: number;
+  staff_total: number;
+  arrivals_waiting: number;
+  requests_waiting: number;
+  is_closed: boolean;
+  is_diverting: boolean;
+}
+
+export interface ReplayRound {
+  round_number: number;
+  departments: Record<DepartmentId, ReplayDepartment>;
+  costs: { financial: number; quality: number; details: Record<string, number> };
+  events: string[];
+}
+
+export interface ReplayResponse {
+  game_id: string;
+  rounds: ReplayRound[];
+  total_financial_cost: number;
+  total_quality_cost: number;
+}
+
 // --- Recommendations ---
 export interface ScoredCandidate {
   description: string;

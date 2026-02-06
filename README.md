@@ -11,6 +11,9 @@ CPSC 433 - Case Study 2
 - **AI Optimizer** — Candidate action generation with 2-phase scoring (deterministic prune then MC refinement), ranking actions by expected total cost
 - **LLM Agent** — Optional natural-language recommendations via Ollama, llama.cpp, vLLM, Claude API, or OpenAI API with automatic fallback to optimizer
 - **Interactive Dashboard** — React frontend for playing a full 24-round game in the browser with department visualization, step-by-step forms, AI panel, and cost charts
+- **Game History & Replay** — Round-by-round timeline view with department snapshots, costs, and events for post-game review
+- **CSV Export** — Downloadable scoring worksheet matching the FNER format with per-round cost breakdowns by department
+- **Error Boundary** — React error boundary with graceful fallback UI; backend returns JSON for all unhandled exceptions
 - **137 Backend Tests** — Comprehensive test suite covering engine rules, forecasting, API endpoints, and agent logic
 
 ## Architecture
@@ -312,7 +315,7 @@ WHOP/
 |       |-- utils/                   # Staff utils, time mapping, formatters
 |       |-- api/client.ts            # Axios API client
 |       |-- store/gameStore.ts       # Zustand state management
-|       `-- components/              # React components (24 files)
+|       `-- components/              # React components (26 files)
 `-- Background_and_Design_Docs/      # Reference material (gitignored)
 ```
 
@@ -330,6 +333,8 @@ WHOP/
 | `POST` | `/api/game/{id}/step/staffing` | Submit staffing decisions |
 | `POST` | `/api/game/{id}/step/paperwork` | Calculate costs, advance round |
 | `GET` | `/api/game/{id}/history` | Get cost history |
+| `GET` | `/api/game/{id}/replay` | Round-by-round snapshots for replay view |
+| `GET` | `/api/game/{id}/export/csv` | Download FNER scoring worksheet (CSV) |
 | `GET` | `/api/game/{id}/forecast` | Monte Carlo forecast + metrics |
 | `GET` | `/api/game/{id}/optimize` | Optimizer for current step |
 | `GET` | `/api/game/{id}/recommend/{step}` | AI recommendation |

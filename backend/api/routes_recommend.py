@@ -22,7 +22,23 @@ _DECISION_STEPS = {
 
 @router.get("/{game_id}/recommend/{step}")
 def recommend(game_id: str, step: str):
-    """Get recommendations for a step."""
+    """Get AI-powered recommendations for a decision step.
+
+    Runs the optimizer first (always), then optionally enhances with an LLM.
+    Falls back to optimizer if LLM is unavailable or produces invalid output.
+
+    Args:
+        game_id: UUID of the game session.
+        step: One of 'arrivals', 'exits', 'closed', 'staffing'.
+
+    Returns:
+        Recommendation with action, reasoning, alternatives, cost_impact,
+        risk_flags, confidence, source ('llm' or 'optimizer_fallback'),
+        and optimizer candidates for comparison.
+
+    Raises:
+        400: Invalid step name. 404: Game not found.
+    """
     step_type = _DECISION_STEPS.get(step)
     if step_type is None:
         raise HTTPException(

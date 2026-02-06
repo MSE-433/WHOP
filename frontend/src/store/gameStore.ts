@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type {
   GameState,
   RecommendationResponse,
+  ReplayResponse,
   ArrivalsAction,
   ExitsAction,
   ClosedAction,
@@ -16,6 +17,7 @@ interface GameStore {
   gameId: string | null;
   state: GameState | null;
   recommendation: RecommendationResponse | null;
+  replay: ReplayResponse | null;
   loading: boolean;
   error: string | null;
 
@@ -28,6 +30,8 @@ interface GameStore {
   submitStaffing: (action: StaffingAction) => Promise<void>;
   submitPaperwork: () => Promise<void>;
   fetchRecommendation: () => Promise<void>;
+  fetchReplay: () => Promise<void>;
+  closeReplay: () => void;
   clearError: () => void;
 }
 
@@ -61,17 +65,18 @@ export const useGameStore = create<GameStore>((set, get) => {
     gameId: null,
     state: null,
     recommendation: null,
+    replay: null,
     loading: false,
     error: null,
 
     clearError: () => set({ error: null }),
 
     endGame: () => {
-      set({ gameId: null, state: null, recommendation: null, loading: false, error: null });
+      set({ gameId: null, state: null, recommendation: null, replay: null, loading: false, error: null });
     },
 
     newGame: async (config?: CustomGameConfig) => {
-      set({ loading: true, error: null });
+      set({ loading: true, error: null, replay: null });
       try {
         const { game_id, state } = await api.createGame(config);
         set({ gameId: game_id, state, recommendation: null, loading: false });
@@ -163,5 +168,18 @@ export const useGameStore = create<GameStore>((set, get) => {
         set({ error: extractError(err) });
       }
     },
+
+    fetchReplay: async () => {
+      const { gameId } = get();
+      if (!gameId) return;
+      try {
+        const replay = await api.getReplay(gameId);
+        set({ replay });
+      } catch (err) {
+        set({ error: extractError(err) });
+      }
+    },
+
+    closeReplay: () => set({ replay: null }),
   };
 });
