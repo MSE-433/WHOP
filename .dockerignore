@@ -1,0 +1,14 @@
+node_modules/
+venv/
+__pycache__/
+.git/
+*.db
+dist/
+.env
+.DS_Store
+Background_and_Design_Docs/
+.Background_and_Design_Docs/
+*.log
+.pytest_cache/
+.coverage
+htmlcov/

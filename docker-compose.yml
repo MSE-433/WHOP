@@ -1,0 +1,50 @@
+services:
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      - WHOP_DB_PATH=/data/whop.db
+    volumes:
+      - backend-data:/data
+    expose:
+      - "8000"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  ollama:
+    image: ollama/ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    profiles:
+      - ollama
+
+  ollama-pull:
+    image: ollama/ollama
+    depends_on:
+      - ollama
+    entrypoint: ["sh", "-c", "sleep 3 && ollama pull ${WHOP_OLLAMA_MODEL:-llama3}"]
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    profiles:
+      - ollama
+
+  llamacpp:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend/LLMs:/models
+    command: -m /models/${LLAMACPP_MODEL_FILE:-qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf} --host 0.0.0.0 --port 8080
+    profiles:
+      - llamacpp
+
+volumes:
+  backend-data:
+  ollama-models:

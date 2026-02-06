@@ -16,16 +16,28 @@ CPSC 433 - Case Study 2
 ## Architecture
 
 ```
-React 18 + Vite + TypeScript (frontend/)
-        | REST API (JSON)
+docker compose up
+├── frontend   (nginx:alpine — serves React app + proxies /api → backend)
+├── backend    (python:3.11 — FastAPI game engine, forecast, AI agent)
+├── ollama     (optional — local LLM inference)
+└── llamacpp   (optional — local LLM inference)
+
+React 18 + TypeScript (frontend/)
+        | /api/* → nginx reverse proxy
 FastAPI + Python (backend/)
   |-- Game Engine (authoritative state machine)
   |-- Forecast Engine (deterministic lookahead + Monte Carlo)
   |-- LLM Agent (model-agnostic: Ollama/llama.cpp/vLLM/Claude/OpenAI)
-  |-- SQLite database
+  |-- SQLite database (persistent volume)
 ```
 
 ## Prerequisites
+
+### Docker (recommended)
+
+- **Docker** and **Docker Compose** (Docker Desktop includes both)
+
+### Local development
 
 - **Python 3.11+**
 - **Node.js 18+** and npm
@@ -55,7 +67,67 @@ For cloud LLM providers, no brew install is needed — just set your API key in 
 - **Claude API**: Get key from [console.anthropic.com](https://console.anthropic.com)
 - **OpenAI API**: Get key from [platform.openai.com](https://platform.openai.com)
 
-## Quick Start
+## Quick Start (Docker)
+
+```bash
+git clone <repo-url>
+cd WHOP
+
+# Copy and configure environment (optional — app works without LLM)
+cp .env.example .env
+# Edit .env if you want to enable an LLM provider
+
+# Start the app
+docker compose up --build
+
+# With Ollama for local LLM recommendations (auto-pulls model from WHOP_OLLAMA_MODEL in .env)
+docker compose --profile ollama up --build
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+> **Ollama note:** On first run, the `ollama-pull` service automatically downloads the model set in `WHOP_OLLAMA_MODEL` (default: `llama3`). This may take a few minutes depending on model size. The model is cached in a Docker volume so subsequent starts are instant. To manually pull a different model:
+> ```bash
+> docker compose exec ollama ollama pull llama3.1:8b
+> ```
+
+```bash
+# Stop containers
+docker compose down
+
+# Stop and remove volumes (database, Ollama models)
+docker compose down -v
+
+# Full cleanup — remove all images, build cache, and unused data
+docker system prune -a
+```
+
+### Docker Compose profiles
+
+LLM services are opt-in via profiles:
+
+```bash
+# App only (no LLM — optimizer still provides recommendations)
+docker compose up
+
+# App + Ollama
+docker compose --profile ollama up
+
+# App + llama.cpp
+docker compose --profile llamacpp up
+
+# App + both LLM servers
+docker compose --profile ollama --profile llamacpp up
+```
+
+When using Docker, set container hostnames in `.env` instead of `localhost`:
+
+| Setting | Local | Docker |
+|---|---|---|
+| `WHOP_OLLAMA_BASE_URL` | `http://localhost:11434` | `http://ollama:11434` |
+| `WHOP_LLAMACPP_SERVER_URL` | `http://localhost:8080` | `http://llamacpp:8080` |
+
+## Quick Start (Local Development)
 
 ### 1. Clone the repository
 
@@ -176,13 +248,25 @@ WHOP_LLM_TIMEOUT_SECONDS=30
 ## Commands Reference
 
 ```bash
-# --- Backend ---
+# --- Docker ---
+docker compose up --build                            # Build and start app
+docker compose up -d                                 # Start in background
+docker compose --profile ollama up                   # Start with Ollama
+docker compose --profile llamacpp up                 # Start with llama.cpp
+docker compose --profile ollama --profile llamacpp up  # Start with both
+docker compose down                                  # Stop containers
+docker compose down -v                               # Stop and remove volumes (DB, Ollama models)
+docker system prune -a                               # Remove all images, build cache, unused data
+docker compose logs -f backend                       # Follow backend logs
+docker compose logs -f frontend                      # Follow frontend logs
+
+# --- Backend (local dev) ---
 cd backend && ./venv/bin/pytest tests/ -v          # Run all 137 tests
 cd backend && ./venv/bin/pytest tests/ -v -x        # Stop on first failure
 cd backend && ./venv/bin/pytest tests/test_api.py   # Run API tests only
 cd backend && ./venv/bin/uvicorn main:app --reload --port 8000  # Dev server
 
-# --- Frontend ---
+# --- Frontend (local dev) ---
 cd frontend && npm run dev          # Dev server (http://localhost:5173)
 cd frontend && npm run build        # Production build
 cd frontend && npm run preview      # Preview production build
@@ -193,11 +277,15 @@ cd frontend && npm run lint         # ESLint check
 
 ```
 WHOP/
-|-- .env.example                     # LLM configuration template
+|-- docker-compose.yml               # Docker Compose (app + optional LLM services)
+|-- .env.example                     # Configuration template
+|-- .dockerignore                    # Docker build exclusions
 |-- backend/
+|   |-- Dockerfile                   # Python 3.11-slim image
+|   |-- requirements-docker.txt      # Minimal deps (no torch/vllm/mlx)
 |   |-- main.py                      # FastAPI app entry point
 |   |-- config.py                    # Settings (DB, CORS, LLM providers)
-|   |-- requirements.txt             # Python dependencies
+|   |-- requirements.txt             # Full Python dependencies (local dev)
 |   |-- models/                      # Pydantic data models
 |   |-- data/                        # Card sequences, events, starting state
 |   |-- engine/                      # Game engine (state machine + rules)
@@ -206,8 +294,10 @@ WHOP/
 |   |-- api/                         # REST API routes
 |   |-- db/                          # SQLite database layer
 |   |-- tests/                       # 137 tests
-|   `-- venv/                        # Python virtual environment
+|   `-- venv/                        # Python virtual environment (local dev)
 |-- frontend/
+|   |-- Dockerfile                   # Multi-stage: Node build -> nginx:alpine
+|   |-- nginx.conf                   # Static files + /api reverse proxy
 |   |-- vite.config.ts               # Vite + React + Tailwind v4
 |   |-- package.json
 |   `-- src/
