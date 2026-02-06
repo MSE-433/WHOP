@@ -15,6 +15,7 @@ from engine.game_engine import (
     process_staffing_step,
     process_paperwork_step,
 )
+from data.starting_state import CustomGameConfig
 from engine.validator import ValidationError
 from db.database import get_db
 from db import repository as repo
@@ -38,10 +39,10 @@ def _save(state: GameState) -> None:
 
 
 @router.post("/new")
-def new_game():
-    """Create a new game."""
+def new_game(config: CustomGameConfig | None = None):
+    """Create a new game, optionally with custom starting parameters."""
     game_id = str(uuid.uuid4())
-    state = create_game(game_id)
+    state = create_game(game_id, config=config)
     with get_db() as conn:
         repo.create_session(conn, game_id, state)
     return {"game_id": game_id, "state": state.model_dump()}

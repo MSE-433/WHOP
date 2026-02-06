@@ -10,7 +10,7 @@ This is the main entry point for game operations. It:
 from models.enums import StepType, STEP_ORDER, DepartmentId
 from models.game_state import GameState
 from models.actions import ArrivalsAction, ExitsAction, ClosedAction, StaffingAction
-from data.starting_state import create_starting_state
+from data.starting_state import create_starting_state, CustomGameConfig
 from engine.event_handler import is_event_round, draw_events, apply_events
 from engine.step_arrivals import process_new_arrivals, mature_transfers, apply_arrivals_action
 from engine.step_exits import apply_exits_action, get_available_exits
@@ -26,9 +26,9 @@ from engine.validator import (
 )
 
 
-def create_game(game_id: str | None = None) -> GameState:
+def create_game(game_id: str | None = None, config: CustomGameConfig | None = None) -> GameState:
     """Create a new game with initial FNER state."""
-    return create_starting_state(game_id)
+    return create_starting_state(game_id, config=config)
 
 
 def process_event_step(
@@ -37,7 +37,9 @@ def process_event_step(
 ) -> GameState:
     """Step 0: Process events if this is an event round.
 
-    Returns the state (possibly with events applied) and advances to ARRIVALS.
+    Also processes new arrivals and matures transfers so that
+    arrivals_waiting/requests_waiting are populated in the state
+    before the user makes decisions in the ARRIVALS step.
     """
     if state.current_step != StepType.EVENT:
         raise ValidationError(f"Expected EVENT step, got {state.current_step}")
@@ -46,19 +48,23 @@ def process_event_step(
         events = draw_events(state.round_number, seed=event_seed)
         state = apply_events(state, events)
 
+    # Pre-populate arrivals so frontend can display waiting counts
+    state = process_new_arrivals(state)
+    state = mature_transfers(state)
+
     # Advance to arrivals
     state.current_step = StepType.ARRIVALS
     return state
 
 
 def process_arrivals_step(state: GameState, action: ArrivalsAction) -> GameState:
-    """Step 1: Process arrivals — add new patients, then apply player decisions."""
+    """Step 1: Apply player admission decisions.
+
+    New arrivals and transfer maturation are already processed during the
+    event step, so arrivals_waiting/requests_waiting are already populated.
+    """
     if state.current_step != StepType.ARRIVALS:
         raise ValidationError(f"Expected ARRIVALS step, got {state.current_step}")
-
-    # Add card-based arrivals and mature transfers
-    state = process_new_arrivals(state)
-    state = mature_transfers(state)
 
     # Validate and apply player decisions
     validate_arrivals(state, action)

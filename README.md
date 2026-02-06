@@ -95,6 +95,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 # Stop containers
 docker compose down
 
+# Rebuild and restart after code changes
+docker compose up --build -d
+
+# If you get stale network errors, clean up first then rebuild
+docker compose down --remove-orphans
+docker compose up --build -d
+
 # Stop and remove volumes (database, Ollama models)
 docker compose down -v
 

@@ -14,7 +14,6 @@ from engine.validator import (
     validate_arrivals, validate_exits, validate_closed, validate_staffing,
     ValidationError,
 )
-from engine.step_arrivals import process_new_arrivals, mature_transfers
 from forecast.optimizer import optimize_step
 from agent.llm_client import LLMClient, LLMClientError
 from agent.prompt_builder import SYSTEM_PROMPT, build_user_prompt
@@ -116,15 +115,11 @@ class Recommender:
     def _validate_action(self, state: GameState, step: StepType, action) -> None:
         """Validate the action against game rules.
 
-        For ARRIVALS, we need to simulate process_new_arrivals + mature_transfers
-        first since those haven't been applied to the state yet when the
-        recommendation is requested.
+        Arrivals/transfers are already populated in state (processed during
+        event step), so no pre-simulation needed.
         """
         if step == StepType.ARRIVALS:
-            sim_state = state.model_copy(deep=True)
-            process_new_arrivals(sim_state)
-            mature_transfers(sim_state)
-            validate_arrivals(sim_state, action)
+            validate_arrivals(state, action)
         elif step == StepType.EXITS:
             validate_exits(state, action)
         elif step == StepType.CLOSED:

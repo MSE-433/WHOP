@@ -1,32 +1,14 @@
 import { useGameStore } from './store/gameStore';
 import { MainLayout } from './components/layout/MainLayout';
 import { GameOverOverlay } from './components/shared/GameOverOverlay';
+import { StartScreen } from './components/shared/StartScreen';
 
 function App() {
-  const { state, loading, error, newGame, clearError } = useGameStore();
+  const { state, error, clearError } = useGameStore();
 
   // No active game — show start screen
   if (!state) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen gap-6">
-        <h1 className="text-4xl font-bold tracking-tight">
-          WHOP
-        </h1>
-        <p className="text-gray-400 text-lg">
-          Workflow-guided Hospital Outcomes Platform
-        </p>
-        <button
-          onClick={newGame}
-          disabled={loading}
-          className="px-8 py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 rounded-lg text-lg font-medium transition-colors cursor-pointer"
-        >
-          {loading ? 'Starting...' : 'New Game'}
-        </button>
-        {error && (
-          <p className="text-red-400 text-sm">{error}</p>
-        )}
-      </div>
-    );
+    return <StartScreen />;
   }
 
   return (

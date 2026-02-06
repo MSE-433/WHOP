@@ -13,8 +13,21 @@ import type {
 
 const api = axios.create({ baseURL: '/api/game' });
 
-export async function createGame(): Promise<NewGameResponse> {
-  const { data } = await api.post<NewGameResponse>('/new');
+export interface DeptConfig {
+  patients?: number;
+  core_staff?: number;
+  bed_capacity?: number;
+}
+
+export interface CustomGameConfig {
+  er?: DeptConfig;
+  surgery?: DeptConfig;
+  cc?: DeptConfig;
+  sd?: DeptConfig;
+}
+
+export async function createGame(config?: CustomGameConfig): Promise<NewGameResponse> {
+  const { data } = await api.post<NewGameResponse>('/new', config ?? null);
   return data;
 }
 

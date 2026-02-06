@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { STEP_ORDER } from '../../types/game';
 import { roundToTime, isEventRound } from '../../utils/timeMapping';
@@ -5,6 +6,9 @@ import { formatCurrency, STEP_LABELS } from '../../utils/formatters';
 
 export function GameHeader() {
   const state = useGameStore((s) => s.state);
+  const endGame = useGameStore((s) => s.endGame);
+  const [showConfirm, setShowConfirm] = useState(false);
+
   if (!state) return null;
 
   const stepIndex = STEP_ORDER.indexOf(state.current_step);
@@ -45,14 +49,40 @@ export function GameHeader() {
           ))}
         </div>
 
-        {/* Running Costs */}
-        <div className="flex gap-4 text-sm">
+        {/* Running Costs + End Game */}
+        <div className="flex items-center gap-4 text-sm">
           <span>
             Financial: <span className="text-yellow-400 font-medium">{formatCurrency(state.total_financial_cost)}</span>
           </span>
           <span>
             Quality: <span className="text-orange-400 font-medium">{formatCurrency(state.total_quality_cost)}</span>
           </span>
+
+          {/* End Game button */}
+          {!showConfirm ? (
+            <button
+              onClick={() => setShowConfirm(true)}
+              className="ml-2 px-3 py-1 text-xs bg-gray-700 hover:bg-red-600/80 text-gray-300 hover:text-white rounded transition-colors cursor-pointer"
+            >
+              End Game
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 ml-2">
+              <span className="text-xs text-red-400">End game?</span>
+              <button
+                onClick={() => { endGame(); setShowConfirm(false); }}
+                className="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded cursor-pointer"
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded cursor-pointer"
+              >
+                No
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

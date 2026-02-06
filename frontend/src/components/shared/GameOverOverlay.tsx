@@ -2,7 +2,7 @@ import { useGameStore } from '../../store/gameStore';
 import { formatCurrency } from '../../utils/formatters';
 
 export function GameOverOverlay() {
-  const { state, newGame } = useGameStore();
+  const { state, endGame } = useGameStore();
   if (!state || !state.is_finished) return null;
 
   return (
@@ -10,7 +10,7 @@ export function GameOverOverlay() {
       <div className="bg-gray-900 border border-gray-700 rounded-xl max-w-lg w-full p-6 space-y-4">
         <h2 className="text-2xl font-bold text-center">Game Over</h2>
         <p className="text-gray-400 text-center">
-          24-hour shift complete!
+          {state.round_costs.length >= 24 ? '24-hour shift complete!' : `Game ended after ${state.round_costs.length} rounds.`}
         </p>
 
         <div className="grid grid-cols-2 gap-4 bg-gray-800/50 rounded-lg p-4">
@@ -53,7 +53,7 @@ export function GameOverOverlay() {
         )}
 
         <button
-          onClick={newGame}
+          onClick={endGame}
           className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium text-lg transition-colors cursor-pointer"
         >
           New Game

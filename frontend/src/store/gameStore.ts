@@ -9,6 +9,7 @@ import type {
 } from '../types/game';
 import { DECISION_STEPS } from '../types/game';
 import * as api from '../api/client';
+import type { CustomGameConfig } from '../api/client';
 import axios from 'axios';
 
 interface GameStore {
@@ -18,7 +19,8 @@ interface GameStore {
   loading: boolean;
   error: string | null;
 
-  newGame: () => Promise<void>;
+  newGame: (config?: CustomGameConfig) => Promise<void>;
+  endGame: () => void;
   submitEvent: (seed?: number) => Promise<void>;
   submitArrivals: (action: ArrivalsAction) => Promise<void>;
   submitExits: (action: ExitsAction) => Promise<void>;
@@ -64,10 +66,14 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     clearError: () => set({ error: null }),
 
-    newGame: async () => {
+    endGame: () => {
+      set({ gameId: null, state: null, recommendation: null, loading: false, error: null });
+    },
+
+    newGame: async (config?: CustomGameConfig) => {
       set({ loading: true, error: null });
       try {
-        const { game_id, state } = await api.createGame();
+        const { game_id, state } = await api.createGame(config);
         set({ gameId: game_id, state, recommendation: null, loading: false });
       } catch (err) {
         set({ loading: false, error: extractError(err) });
