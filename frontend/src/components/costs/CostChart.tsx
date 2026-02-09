@@ -20,7 +20,18 @@ interface ChartRow {
 
 export function CostChart() {
   const state = useGameStore((s) => s.state);
-  if (!state || state.round_costs.length === 0) return null;
+  if (!state) return null;
+
+  if (state.round_costs.length === 0) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
+        <h3 className="font-semibold mb-3">Cost Overview</h3>
+        <div className="flex items-center justify-center h-32 text-gray-500 text-sm">
+          Cost data will appear after Round 1
+        </div>
+      </div>
+    );
+  }
 
   let cumFin = 0;
   let cumQual = 0;
@@ -41,7 +52,7 @@ export function CostChart() {
   return (
     <div className="bg-gray-900 border border-gray-800 rounded-lg p-4">
       <h3 className="font-semibold mb-3">Cost Overview</h3>
-      <ResponsiveContainer width="100%" height={250}>
+      <ResponsiveContainer width="100%" height={200} className="lg:!h-[300px]">
         <ComposedChart data={data} barGap={2} barCategoryGap="25%">
           <XAxis
             dataKey="round"

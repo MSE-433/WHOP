@@ -32,7 +32,10 @@ export function AIPanel() {
       )}
 
       {isDecisionStep && !recommendation && (
-        <p className="text-gray-500 text-sm">Loading recommendation...</p>
+        <div className="flex items-center gap-2 text-gray-400 text-sm">
+          <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <span>Analyzing...</span>
+        </div>
       )}
 
       {recommendation && (

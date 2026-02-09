@@ -10,8 +10,14 @@ import type {
 } from '../types/game';
 import { DECISION_STEPS } from '../types/game';
 import * as api from '../api/client';
-import type { CustomGameConfig } from '../api/client';
+import type { CustomGameConfig, ChatMessagePayload } from '../api/client';
 import axios from 'axios';
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 interface GameStore {
   gameId: string | null;
@@ -20,6 +26,8 @@ interface GameStore {
   replay: ReplayResponse | null;
   loading: boolean;
   error: string | null;
+  chatMessages: ChatMessage[];
+  chatLoading: boolean;
 
   newGame: (config?: CustomGameConfig) => Promise<void>;
   endGame: () => void;
@@ -33,6 +41,8 @@ interface GameStore {
   fetchReplay: () => Promise<void>;
   closeReplay: () => void;
   clearError: () => void;
+  sendChatMessage: (message: string) => Promise<void>;
+  clearChat: () => void;
 }
 
 function extractError(err: unknown): string {
@@ -68,15 +78,17 @@ export const useGameStore = create<GameStore>((set, get) => {
     replay: null,
     loading: false,
     error: null,
+    chatMessages: [],
+    chatLoading: false,
 
     clearError: () => set({ error: null }),
 
     endGame: () => {
-      set({ gameId: null, state: null, recommendation: null, replay: null, loading: false, error: null });
+      set({ gameId: null, state: null, recommendation: null, replay: null, loading: false, error: null, chatMessages: [], chatLoading: false });
     },
 
     newGame: async (config?: CustomGameConfig) => {
-      set({ loading: true, error: null, replay: null });
+      set({ loading: true, error: null, replay: null, chatMessages: [], chatLoading: false });
       try {
         const { game_id, state } = await api.createGame(config);
         set({ gameId: game_id, state, recommendation: null, loading: false });
@@ -181,5 +193,49 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     closeReplay: () => set({ replay: null }),
+
+    clearChat: () => set({ chatMessages: [] }),
+
+    sendChatMessage: async (message: string) => {
+      const { gameId, chatMessages } = get();
+      if (!gameId) return;
+
+      // Optimistically append user message
+      const userMsg: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: message,
+      };
+      set({ chatMessages: [...chatMessages, userMsg], chatLoading: true });
+
+      // Build history payload (exclude the new user message — it goes in `message` field)
+      const history: ChatMessagePayload[] = chatMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      try {
+        const resp = await api.sendChat(gameId, { message, history });
+        const assistantMsg: ChatMessage = {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          content: resp.reply,
+        };
+        set((s) => ({
+          chatMessages: [...s.chatMessages, assistantMsg],
+          chatLoading: false,
+        }));
+      } catch (err) {
+        const errorMsg: ChatMessage = {
+          id: `error-${Date.now()}`,
+          role: 'assistant',
+          content: `Error: ${extractError(err)}`,
+        };
+        set((s) => ({
+          chatMessages: [...s.chatMessages, errorMsg],
+          chatLoading: false,
+        }));
+      }
+    },
   };
 });

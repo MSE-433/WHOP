@@ -40,13 +40,15 @@ export function PaperworkView() {
         </div>
       )}
 
-      <button
-        onClick={submitPaperwork}
-        disabled={loading}
-        className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 rounded-lg font-medium transition-colors cursor-pointer"
-      >
-        {loading ? 'Processing...' : state.round_number >= 24 ? 'Finish Game' : 'Next Round'}
-      </button>
+      <div className="pt-3 sticky bottom-0 bg-gradient-to-t from-gray-900 via-gray-900">
+        <button
+          onClick={submitPaperwork}
+          disabled={loading}
+          className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 rounded-lg font-medium transition-colors cursor-pointer"
+        >
+          {loading ? 'Processing...' : state.round_number >= 24 ? 'Finish Game' : 'Next Round'}
+        </button>
+      </div>
     </div>
   );
 }

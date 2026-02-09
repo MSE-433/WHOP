@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 2048
     llm_timeout_seconds: float = 30.0
 
-    model_config = {"env_file": ".env", "env_prefix": "WHOP_"}
+    model_config = {"env_file": (".env", "../.env"), "env_prefix": "WHOP_", "extra": "ignore"}
 
 
 settings = Settings()

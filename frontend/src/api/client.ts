@@ -97,3 +97,27 @@ export async function getReplay(gameId: string): Promise<ReplayResponse> {
   const { data } = await api.get<ReplayResponse>(`/${gameId}/replay`);
   return data;
 }
+
+// --- Chat ---
+
+export interface ChatMessagePayload {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatRequest {
+  message: string;
+  history: ChatMessagePayload[];
+}
+
+export interface ChatResponse {
+  reply: string;
+  provider: string;
+  model: string;
+  llm_available: boolean;
+}
+
+export async function sendChat(gameId: string, req: ChatRequest): Promise<ChatResponse> {
+  const { data } = await api.post<ChatResponse>(`/${gameId}/chat`, req);
+  return data;
+}

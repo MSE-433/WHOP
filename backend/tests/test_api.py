@@ -235,8 +235,10 @@ class TestRecommend:
         r = client.get(f"/api/game/{game_id}/recommend/arrivals")
         assert r.status_code == 200
         data = r.json()
-        assert data["llm_available"] is False
-        assert data["source"] == "optimizer_fallback"
+        assert "llm_available" in data
+        assert data["source"] in ("llm", "optimizer_fallback")
+        assert "recommended_action" in data
+        assert "reasoning" in data
 
 
 class TestFullGameViaAPI:

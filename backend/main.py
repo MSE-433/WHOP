@@ -16,6 +16,7 @@ from db.database import init_db
 from api.routes_game import router as game_router
 from api.routes_forecast import router as forecast_router
 from api.routes_recommend import router as recommend_router
+from api.routes_chat import router as chat_router
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ app.add_middleware(
 app.include_router(game_router)
 app.include_router(forecast_router)
 app.include_router(recommend_router)
+app.include_router(chat_router)
 
 
 @app.exception_handler(Exception)

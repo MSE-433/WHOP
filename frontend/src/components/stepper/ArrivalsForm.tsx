@@ -52,8 +52,14 @@ export function ArrivalsForm() {
     submitArrivals(action);
   }
 
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && !(e.target instanceof HTMLInputElement && e.target.type === 'number')) {
+      handleSubmit();
+    }
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onKeyDown={handleKeyDown}>
       <div className="flex items-center justify-between">
         <h3 className="font-semibold text-lg">Arrivals</h3>
         {recommendation && (
@@ -124,13 +130,15 @@ export function ArrivalsForm() {
         );
       })}
 
-      <button
-        onClick={handleSubmit}
-        disabled={loading}
-        className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 rounded-lg font-medium transition-colors cursor-pointer"
-      >
-        {loading ? 'Processing...' : 'Submit Arrivals'}
-      </button>
+      <div className="pt-3 sticky bottom-0 bg-gradient-to-t from-gray-900 via-gray-900">
+        <button
+          onClick={handleSubmit}
+          disabled={loading}
+          className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 rounded-lg font-medium transition-colors cursor-pointer"
+        >
+          {loading ? 'Processing...' : 'Submit Arrivals'}
+        </button>
+      </div>
     </div>
   );
 }
