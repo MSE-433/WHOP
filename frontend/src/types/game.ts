@@ -80,6 +80,12 @@ export interface GameState {
   ambulances_diverted_this_round: number;
 }
 
+// --- Card Overrides ---
+export interface CardOverrides {
+  arrivals?: Record<DepartmentId, number>;
+  exits?: Record<DepartmentId, number>;
+}
+
 // --- Actions ---
 export interface AdmitDecision {
   department: DepartmentId;
@@ -95,6 +101,7 @@ export interface AcceptTransferDecision {
 export interface ArrivalsAction {
   admissions: AdmitDecision[];
   transfer_accepts: AcceptTransferDecision[];
+  arrival_overrides?: Record<DepartmentId, number>;
 }
 
 export interface ExitRouting {
@@ -164,6 +171,100 @@ export interface ReplayResponse {
   total_quality_cost: number;
 }
 
+// --- Round Cards ---
+export interface RoundCardEntry {
+  arrivals: number;
+  exits: number;
+  walkin?: number;
+  ambulance?: number;
+}
+
+export interface RoundCards {
+  round: number;
+  departments: Record<string, RoundCardEntry>;
+}
+
+// --- Forecast Snapshot ---
+export interface ForecastDepartmentSnapshot {
+  census: number;
+  arrivals_waiting: number;
+  requests_waiting: number;
+  beds_available: number;
+  idle_staff: number;
+  extra_staff: number;
+  is_closed: boolean;
+  is_diverting: boolean;
+}
+
+export interface ForecastRoundSnapshot {
+  round_number: number;
+  departments: Record<string, ForecastDepartmentSnapshot>;
+  round_financial: number;
+  round_quality: number;
+  cumulative_financial: number;
+  cumulative_quality: number;
+}
+
+export interface MonteCarloSummary {
+  num_simulations: number;
+  horizon: number;
+  expected_financial: number;
+  expected_quality: number;
+  p10_financial: number;
+  p10_quality: number;
+  p50_financial: number;
+  p50_quality: number;
+  p90_financial: number;
+  p90_quality: number;
+  expected_snapshots: ForecastRoundSnapshot[];
+  risk_flags: string[];
+}
+
+export interface DeptUtilization {
+  staff_utilization: number;
+  bed_utilization: number;
+  overflow: number;
+  pressure: number;
+}
+
+export interface BottleneckAlert {
+  department: string;
+  severity: 'low' | 'medium' | 'high';
+  reason: string;
+}
+
+export interface StaffEfficiency {
+  idle: number;
+  deficit: number;
+  extra_on_duty: number;
+  recommend_extra: number;
+  recommend_return: number;
+}
+
+export interface DiversionROI {
+  recommend_diversion: boolean;
+  reason: string;
+  diversion_cost: number;
+  avoided_waiting_cost: number;
+  net_savings: number;
+}
+
+export interface CapacityForecastEntry {
+  round: number;
+  arrivals: number;
+  exits: number;
+  net_flow: number;
+}
+
+export interface ForecastSnapshot {
+  monte_carlo: MonteCarloSummary;
+  utilization: Record<string, DeptUtilization>;
+  capacity_forecast: Record<string, CapacityForecastEntry[]>;
+  bottlenecks: BottleneckAlert[];
+  diversion_roi: DiversionROI;
+  staff_efficiency: Record<string, StaffEfficiency>;
+}
+
 // --- Recommendations ---
 export interface ScoredCandidate {
   description: string;
@@ -181,8 +282,8 @@ export interface RecommendationResponse {
   step: string;
   recommended_action: Record<string, unknown>;
   reasoning: string;
-  alternatives: Record<string, unknown>[];
-  cost_impact: Record<string, unknown>;
+  alternatives: string[];
+  cost_impact: number;
   risk_flags: string[];
   confidence: number;
   source: 'llm' | 'optimizer_fallback';
@@ -190,4 +291,7 @@ export interface RecommendationResponse {
   optimizer_candidates: ScoredCandidate[];
   baseline_cost: number;
   horizon_used: number;
+  reasoning_steps?: string[];
+  cost_breakdown?: { action_cost: number; avoided_cost: number; net_impact: number };
+  key_tradeoffs?: string[];
 }

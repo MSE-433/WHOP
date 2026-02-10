@@ -69,4 +69,7 @@ def recommend(game_id: str, step: str):
         "optimizer_candidates": result.optimizer_candidates,
         "baseline_cost": result.baseline_cost,
         "horizon_used": result.horizon_used,
+        "reasoning_steps": result.reasoning_steps,
+        "cost_breakdown": result.cost_breakdown,
+        "key_tradeoffs": result.key_tradeoffs,
     }

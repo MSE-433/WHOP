@@ -1,0 +1,5 @@
+metric,with_idss,without_idss,savings,savings_pct
+financial,76200,159200,83000,52.1
+quality,5210,9600,4390,45.7
+combined,81410,168800,87390,51.8
+time_seconds,388.3,,,

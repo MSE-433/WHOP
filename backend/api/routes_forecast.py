@@ -54,6 +54,37 @@ def forecast(game_id: str, horizon: int | None = None):
     }
 
 
+@router.get("/{game_id}/forecast-snapshot")
+def forecast_snapshot(game_id: str, horizon: int | None = None):
+    """Lightweight combined forecast + metrics endpoint.
+
+    Returns Monte Carlo summary, department utilization, bottleneck alerts,
+    capacity forecast, staff efficiency, and diversion ROI in a single call.
+    """
+    state = _load_or_404(game_id)
+    h = horizon or settings.default_forecast_horizon
+
+    mc = run_monte_carlo(state, h, num_simulations=settings.default_mc_simulations)
+
+    utilization = {
+        dept_id.value: department_utilization(dept)
+        for dept_id, dept in state.departments.items()
+    }
+    cap = capacity_forecast(state, h)
+    bottlenecks = bottleneck_detection(state)
+    div_roi = diversion_roi(state, h)
+    staff = staff_efficiency_analysis(state)
+
+    return {
+        "monte_carlo": mc.model_dump(),
+        "utilization": utilization,
+        "capacity_forecast": cap,
+        "bottlenecks": bottlenecks,
+        "diversion_roi": div_roi,
+        "staff_efficiency": staff,
+    }
+
+
 @router.get("/{game_id}/optimize")
 def optimize(game_id: str, horizon: int | None = None, mc_sims: int | None = None):
     """Run optimizer to generate and rank candidate actions for the current step.

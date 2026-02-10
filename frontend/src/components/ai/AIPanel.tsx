@@ -1,11 +1,10 @@
-import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { DECISION_STEPS } from '../../types/game';
 import { formatCurrency } from '../../utils/formatters';
+import { CandidateChart } from './CandidateChart';
 
 export function AIPanel() {
   const { state, recommendation, fetchRecommendation } = useGameStore();
-  const [showCandidates, setShowCandidates] = useState(false);
 
   if (!state) return null;
 
@@ -40,7 +39,7 @@ export function AIPanel() {
 
       {recommendation && (
         <>
-          {/* Source Badge */}
+          {/* Header: Source Badge + Confidence */}
           <div className="flex items-center gap-2">
             <span className={`px-2 py-0.5 text-xs rounded-full ${
               recommendation.source === 'llm'
@@ -50,19 +49,88 @@ export function AIPanel() {
               {recommendation.source === 'llm' ? 'LLM' : 'Optimizer'}
             </span>
             {recommendation.confidence > 0 && (
-              <span className="text-xs text-gray-500">
-                {Math.round(recommendation.confidence * 100)}% confidence
-              </span>
+              <div className="flex items-center gap-1.5 flex-1">
+                <div className="h-1.5 flex-1 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-indigo-500 rounded-full transition-all"
+                    style={{ width: `${recommendation.confidence * 100}%` }}
+                  />
+                </div>
+                <span className="text-xs text-gray-500 shrink-0">
+                  {Math.round(recommendation.confidence * 100)}%
+                </span>
+              </div>
             )}
           </div>
 
-          {/* Reasoning */}
-          <p className="text-sm text-gray-300">{recommendation.reasoning}</p>
+          {/* Reasoning Section */}
+          {recommendation.reasoning_steps && recommendation.reasoning_steps.length > 0 ? (
+            <div className="space-y-1">
+              <div className="text-xs text-gray-400 font-medium">Reasoning</div>
+              <ol className="list-decimal list-inside space-y-0.5">
+                {recommendation.reasoning_steps.map((step, i) => (
+                  <li key={i} className="text-sm text-gray-300">{step}</li>
+                ))}
+              </ol>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-300">{recommendation.reasoning}</p>
+          )}
 
-          {/* Cost Impact */}
-          {recommendation.baseline_cost > 0 && (
-            <div className="text-xs text-gray-400">
-              Baseline cost: {formatCurrency(recommendation.baseline_cost)} over {recommendation.horizon_used} rounds
+          {/* Cost Impact Card */}
+          {(recommendation.baseline_cost > 0 || recommendation.cost_breakdown) && (
+            <div className="bg-gray-800/50 rounded-lg p-3 space-y-2">
+              <div className="text-xs text-gray-400 font-medium">Cost Impact</div>
+              {recommendation.baseline_cost > 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500">
+                    Baseline ({recommendation.horizon_used}r)
+                  </span>
+                  <span className="text-gray-300">{formatCurrency(recommendation.baseline_cost)}</span>
+                </div>
+              )}
+              {recommendation.cost_impact != null && recommendation.cost_impact !== 0 && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500">Delta</span>
+                  <span className={`font-medium px-1.5 py-0.5 rounded ${
+                    recommendation.cost_impact <= 0
+                      ? 'bg-green-600/20 text-green-400'
+                      : 'bg-red-600/20 text-red-400'
+                  }`}>
+                    {recommendation.cost_impact <= 0 ? '' : '+'}
+                    {formatCurrency(recommendation.cost_impact)}
+                  </span>
+                </div>
+              )}
+              {recommendation.cost_breakdown && (
+                <div className="border-t border-gray-700/50 pt-2 space-y-1">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-500">Action cost</span>
+                    <span className="text-red-400">{formatCurrency(recommendation.cost_breakdown.action_cost)}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-gray-500">Avoided cost</span>
+                    <span className="text-green-400">{formatCurrency(recommendation.cost_breakdown.avoided_cost)}</span>
+                  </div>
+                  <div className="flex justify-between text-[10px] font-medium">
+                    <span className="text-gray-400">Net impact</span>
+                    <span className={recommendation.cost_breakdown.net_impact <= 0 ? 'text-green-400' : 'text-red-400'}>
+                      {formatCurrency(recommendation.cost_breakdown.net_impact)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Key Tradeoffs */}
+          {recommendation.key_tradeoffs && recommendation.key_tradeoffs.length > 0 && (
+            <div className="space-y-1">
+              {recommendation.key_tradeoffs.map((t, i) => (
+                <div key={i} className="text-xs text-amber-300 bg-amber-900/15 border border-amber-600/20 rounded px-2 py-1.5">
+                  {t}
+                </div>
+              ))}
             </div>
           )}
 
@@ -77,31 +145,12 @@ export function AIPanel() {
             </div>
           )}
 
-          {/* Optimizer Candidates */}
+          {/* Candidate Comparison Chart */}
           {recommendation.optimizer_candidates.length > 0 && (
-            <div>
-              <button
-                onClick={() => setShowCandidates(!showCandidates)}
-                className="text-xs text-gray-500 hover:text-gray-300 cursor-pointer"
-              >
-                {showCandidates ? 'Hide' : 'Show'} {recommendation.optimizer_candidates.length} candidates
-              </button>
-              {showCandidates && (
-                <div className="mt-2 space-y-2">
-                  {recommendation.optimizer_candidates.map((c, i) => (
-                    <div key={i} className="bg-gray-800/50 rounded p-2 text-xs">
-                      <div className="font-medium text-gray-300">{c.description}</div>
-                      <div className="text-gray-500 mt-1">
-                        Total: {formatCurrency(c.expected_total)} | Delta: {formatCurrency(c.delta_vs_baseline)}
-                      </div>
-                      {c.reasoning && (
-                        <div className="text-gray-400 mt-1">{c.reasoning}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <CandidateChart
+              candidates={recommendation.optimizer_candidates}
+              baselineCost={recommendation.baseline_cost}
+            />
           )}
         </>
       )}

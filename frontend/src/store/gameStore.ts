@@ -3,6 +3,9 @@ import type {
   GameState,
   RecommendationResponse,
   ReplayResponse,
+  ForecastSnapshot,
+  RoundCards,
+  CardOverrides,
   ArrivalsAction,
   ExitsAction,
   ClosedAction,
@@ -23,6 +26,9 @@ interface GameStore {
   gameId: string | null;
   state: GameState | null;
   recommendation: RecommendationResponse | null;
+  forecast: ForecastSnapshot | null;
+  forecastLoading: boolean;
+  roundCards: RoundCards | null;
   replay: ReplayResponse | null;
   loading: boolean;
   error: string | null;
@@ -31,13 +37,14 @@ interface GameStore {
 
   newGame: (config?: CustomGameConfig) => Promise<void>;
   endGame: () => void;
-  submitEvent: (seed?: number) => Promise<void>;
+  submitEvent: (seed?: number, cardOverrides?: CardOverrides) => Promise<void>;
   submitArrivals: (action: ArrivalsAction) => Promise<void>;
   submitExits: (action: ExitsAction) => Promise<void>;
   submitClosed: (action: ClosedAction) => Promise<void>;
   submitStaffing: (action: StaffingAction) => Promise<void>;
   submitPaperwork: () => Promise<void>;
   fetchRecommendation: () => Promise<void>;
+  fetchForecast: () => Promise<void>;
   fetchReplay: () => Promise<void>;
   closeReplay: () => void;
   clearError: () => void;
@@ -57,17 +64,23 @@ function extractError(err: unknown): string {
 
 export const useGameStore = create<GameStore>((set, get) => {
   async function afterStep(newState: GameState) {
-    set({ state: newState, recommendation: null, loading: false, error: null });
-    // Auto-fetch recommendation for decision steps
-    if (!newState.is_finished && DECISION_STEPS.includes(newState.current_step)) {
-      const { gameId } = get();
-      if (!gameId) return;
-      try {
-        const rec = await api.getRecommendation(gameId, newState.current_step);
-        set({ recommendation: rec });
-      } catch {
-        // Non-critical — recommendation is optional
-      }
+    set({ state: newState, recommendation: null, forecast: null, roundCards: null, loading: false, error: null });
+    const { gameId } = get();
+    if (!gameId || newState.is_finished) return;
+
+    if (DECISION_STEPS.includes(newState.current_step)) {
+      // Fetch recommendation and forecast in parallel
+      const [rec, fc] = await Promise.all([
+        api.getRecommendation(gameId, newState.current_step).catch(() => null),
+        api.getForecast(gameId).catch(() => null),
+      ]);
+      set({ recommendation: rec, forecast: fc });
+    }
+
+    if (newState.current_step === 'event' || newState.current_step === 'arrivals') {
+      // Fetch round card data for EventView and ArrivalsForm (editable arrival overrides)
+      const cards = await api.getRoundCards(gameId, newState.round_number).catch(() => null);
+      set({ roundCards: cards });
     }
   }
 
@@ -75,6 +88,9 @@ export const useGameStore = create<GameStore>((set, get) => {
     gameId: null,
     state: null,
     recommendation: null,
+    forecast: null,
+    forecastLoading: false,
+    roundCards: null,
     replay: null,
     loading: false,
     error: null,
@@ -84,7 +100,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     clearError: () => set({ error: null }),
 
     endGame: () => {
-      set({ gameId: null, state: null, recommendation: null, replay: null, loading: false, error: null, chatMessages: [], chatLoading: false });
+      set({ gameId: null, state: null, recommendation: null, forecast: null, forecastLoading: false, roundCards: null, replay: null, loading: false, error: null, chatMessages: [], chatLoading: false });
     },
 
     newGame: async (config?: CustomGameConfig) => {
@@ -92,17 +108,20 @@ export const useGameStore = create<GameStore>((set, get) => {
       try {
         const { game_id, state } = await api.createGame(config);
         set({ gameId: game_id, state, recommendation: null, loading: false });
+        // Fetch round cards for the first round (event step)
+        const cards = await api.getRoundCards(game_id, state.round_number).catch(() => null);
+        set({ roundCards: cards });
       } catch (err) {
         set({ loading: false, error: extractError(err) });
       }
     },
 
-    submitEvent: async (seed?: number) => {
+    submitEvent: async (seed?: number, cardOverrides?: CardOverrides) => {
       const { gameId } = get();
       if (!gameId) return;
       set({ loading: true, error: null });
       try {
-        const newState = await api.stepEvent(gameId, seed);
+        const newState = await api.stepEvent(gameId, seed, cardOverrides);
         await afterStep(newState);
       } catch (err) {
         set({ loading: false, error: extractError(err) });
@@ -178,6 +197,18 @@ export const useGameStore = create<GameStore>((set, get) => {
         set({ recommendation: rec });
       } catch (err) {
         set({ error: extractError(err) });
+      }
+    },
+
+    fetchForecast: async () => {
+      const { gameId } = get();
+      if (!gameId) return;
+      set({ forecastLoading: true });
+      try {
+        const fc = await api.getForecast(gameId);
+        set({ forecast: fc, forecastLoading: false });
+      } catch {
+        set({ forecastLoading: false });
       }
     },
 

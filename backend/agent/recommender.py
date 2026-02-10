@@ -39,6 +39,9 @@ class RecommendationResponse:
     optimizer_candidates: list[dict] = field(default_factory=list)
     baseline_cost: float = 0.0
     horizon_used: int = 0
+    reasoning_steps: list[str] = field(default_factory=list)
+    cost_breakdown: dict = field(default_factory=dict)
+    key_tradeoffs: list[str] = field(default_factory=list)
 
 
 class Recommender:
@@ -93,6 +96,9 @@ class Recommender:
             ],
             baseline_cost=optimization.baseline_cost,
             horizon_used=optimization.horizon_used,
+            reasoning_steps=parsed.reasoning_steps,
+            cost_breakdown=parsed.cost_breakdown,
+            key_tradeoffs=parsed.key_tradeoffs,
         )
 
     def _try_llm_recommendation(
@@ -109,7 +115,7 @@ class Recommender:
             parsed = parse_llm_response(response.text, step)
             self._validate_action(state, step, parsed.action)
             return parsed
-        except (LLMClientError, ParseError, ValidationError):
+        except Exception:
             return None
 
     def _validate_action(self, state: GameState, step: StepType, action) -> None:

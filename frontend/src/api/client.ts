@@ -5,6 +5,9 @@ import type {
   HistoryResponse,
   RecommendationResponse,
   ReplayResponse,
+  ForecastSnapshot,
+  RoundCards,
+  CardOverrides,
   ArrivalsAction,
   ExitsAction,
   ClosedAction,
@@ -20,11 +23,25 @@ export interface DeptConfig {
   bed_capacity?: number;
 }
 
+export interface CostConfig {
+  er_diversion_financial?: number;
+  er_diversion_quality?: number;
+  er_waiting_financial?: number;
+  er_waiting_quality?: number;
+  extra_staff_financial?: number;
+  extra_staff_quality?: number;
+  arrivals_waiting_financial?: number;
+  arrivals_waiting_quality?: number;
+  requests_waiting_financial?: number;
+  requests_waiting_quality?: number;
+}
+
 export interface CustomGameConfig {
   er?: DeptConfig;
   surgery?: DeptConfig;
   cc?: DeptConfig;
   sd?: DeptConfig;
+  costs?: CostConfig;
 }
 
 export async function createGame(config?: CustomGameConfig): Promise<NewGameResponse> {
@@ -37,9 +54,10 @@ export async function getState(gameId: string): Promise<GameState> {
   return data;
 }
 
-export async function stepEvent(gameId: string, seed?: number): Promise<GameState> {
+export async function stepEvent(gameId: string, seed?: number, cardOverrides?: CardOverrides): Promise<GameState> {
   const params = seed !== undefined ? { event_seed: seed } : {};
-  const { data } = await api.post<GameState>(`/${gameId}/step/event`, null, { params });
+  const body = cardOverrides ?? null;
+  const { data } = await api.post<GameState>(`/${gameId}/step/event`, body, { params });
   return data;
 }
 
@@ -70,6 +88,16 @@ export async function stepPaperwork(gameId: string): Promise<GameState> {
 
 export async function getHistory(gameId: string): Promise<HistoryResponse> {
   const { data } = await api.get<HistoryResponse>(`/${gameId}/history`);
+  return data;
+}
+
+export async function getRoundCards(gameId: string, round: number): Promise<RoundCards> {
+  const { data } = await api.get<RoundCards>(`/${gameId}/round-cards/${round}`);
+  return data;
+}
+
+export async function getForecast(gameId: string): Promise<ForecastSnapshot> {
+  const { data } = await api.get<ForecastSnapshot>(`/${gameId}/forecast-snapshot`);
   return data;
 }
 

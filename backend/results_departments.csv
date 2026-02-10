@@ -1,0 +1,6 @@
+department,with_idss_financial,with_idss_quality,with_idss_combined,without_idss_financial,without_idss_quality,without_idss_combined,financial_savings,quality_savings,combined_savings
+Emergency,46270,4610,50880,101850,6065,107915,55580,1455,57035
+Surgery,17520,395,17915,24380,475,24855,6860,80,6940
+Critical Care,8660,185,8845,26140,975,27115,17480,790,18270
+Step-Down,3750,20,3770,6830,2085,8915,3080,2065,5145
+Total,76200,5210,81410,159200,9600,168800,83000,4390,87390

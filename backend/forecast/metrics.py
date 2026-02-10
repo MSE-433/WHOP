@@ -6,7 +6,7 @@ No deep copies or simulation — these are lightweight read-only queries.
 from models.enums import DepartmentId, EVENT_ROUNDS
 from models.department import DepartmentState
 from models.game_state import GameState
-from models.cost import COST_CONSTANTS
+from models.cost import CostConstants
 from data.card_sequences import get_arrivals, get_exits, get_er_ambulance
 
 
@@ -133,7 +133,7 @@ def diversion_roi(state: GameState, rounds_ahead: int) -> dict:
     Benefit is avoiding $150/patient/round waiting cost for ER.
     Break-even is ~34 rounds of a single patient waiting — almost never worth it.
     """
-    c = COST_CONSTANTS
+    c = state.cost_constants
     current_round = state.round_number
 
     # Ambulances that would be diverted next round
@@ -179,7 +179,7 @@ def staff_efficiency_analysis(state: GameState) -> dict[str, dict]:
     recommend_extra, recommend_return.
     """
     result: dict[str, dict] = {}
-    c = COST_CONSTANTS
+    c = state.cost_constants
 
     for dept_id, dept in state.departments.items():
         idle = dept.staff.total_idle

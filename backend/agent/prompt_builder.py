@@ -211,6 +211,13 @@ def _format_step_constraints(state: GameState, step: StepType) -> str:
 
 def _format_json_schema(step: StepType) -> str:
     """Expected JSON output schema for the current step."""
+    # Common optional fields appended to each schema
+    _extra_fields = (
+        '  "reasoning_steps": ["step 1 of decision chain", "step 2 ..."],\n'
+        '  "cost_breakdown": {"action_cost": 0, "avoided_cost": 0, "net_impact": 0},\n'
+        '  "key_tradeoffs": ["tradeoff description"]\n'
+    )
+
     schemas = {
         StepType.ARRIVALS: (
             '{\n'
@@ -220,7 +227,8 @@ def _format_json_schema(step: StepType) -> str:
             '    "transfer_accepts": [{"department": "er|surgery|cc|sd", "from_dept": "er|surgery|cc|sd", "accept_count": int}]\n'
             '  },\n'
             '  "confidence": 0.0-1.0,\n'
-            '  "risk_flags": ["string"]\n'
+            '  "risk_flags": ["string"],\n'
+            + _extra_fields +
             '}'
         ),
         StepType.EXITS: (
@@ -230,7 +238,8 @@ def _format_json_schema(step: StepType) -> str:
             '    "routings": [{"from_dept": "er|surgery|cc|sd", "walkout_count": int, "transfers": {"dest_dept": count}}]\n'
             '  },\n'
             '  "confidence": 0.0-1.0,\n'
-            '  "risk_flags": ["string"]\n'
+            '  "risk_flags": ["string"],\n'
+            + _extra_fields +
             '}'
         ),
         StepType.CLOSED: (
@@ -242,7 +251,8 @@ def _format_json_schema(step: StepType) -> str:
             '    "divert_er": true/false\n'
             '  },\n'
             '  "confidence": 0.0-1.0,\n'
-            '  "risk_flags": ["string"]\n'
+            '  "risk_flags": ["string"],\n'
+            + _extra_fields +
             '}'
         ),
         StepType.STAFFING: (
@@ -254,7 +264,8 @@ def _format_json_schema(step: StepType) -> str:
             '    "transfers": [{"from_dept": "dept_id", "to_dept": "dept_id", "count": int}]\n'
             '  },\n'
             '  "confidence": 0.0-1.0,\n'
-            '  "risk_flags": ["string"]\n'
+            '  "risk_flags": ["string"],\n'
+            + _extra_fields +
             '}'
         ),
     }

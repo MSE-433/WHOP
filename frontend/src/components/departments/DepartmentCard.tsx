@@ -1,12 +1,15 @@
-import type { DepartmentId, DepartmentState } from '../../types/game';
+import type { DepartmentId, DepartmentState, DeptUtilization, BottleneckAlert } from '../../types/game';
 import { DEPT_NAMES, DEPT_ACCENTS, DEPT_BG, DEPT_TEXT } from '../../utils/formatters';
 import { coreIdle, extraIdle, totalPatients, bedsAvailable, totalRequestsWaiting } from '../../utils/staffUtils';
+import { PressureBar } from './PressureBar';
 
 interface Props {
   dept: DepartmentState;
+  utilization?: DeptUtilization;
+  bottleneck?: BottleneckAlert;
 }
 
-export function DepartmentCard({ dept }: Props) {
+export function DepartmentCard({ dept, utilization, bottleneck }: Props) {
   const id = dept.id as DepartmentId;
   const cIdle = coreIdle(dept.staff);
   const eIdle = extraIdle(dept.staff);
@@ -18,11 +21,32 @@ export function DepartmentCard({ dept }: Props) {
   // Count staff tied up with outgoing transfer patients (still occupied until accepted)
   const outgoingTransferStaff = dept.outgoing_transfers.reduce((sum, t) => sum + t.count, 0);
 
+  const waitingSeverityClass = bottleneck
+    ? bottleneck.severity === 'high'
+      ? 'bg-red-600/20 text-red-400'
+      : bottleneck.severity === 'medium'
+      ? 'bg-amber-600/20 text-amber-400'
+      : 'bg-yellow-600/20 text-yellow-400'
+    : 'bg-yellow-600/20 text-yellow-400';
+
   return (
     <div className={`rounded-lg border-l-4 ${DEPT_ACCENTS[id]} ${DEPT_BG[id]} p-4`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-2">
-        <h3 className={`font-semibold ${DEPT_TEXT[id]}`}>{DEPT_NAMES[id]}</h3>
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-1.5">
+          <h3 className={`font-semibold ${DEPT_TEXT[id]}`}>{DEPT_NAMES[id]}</h3>
+          {bottleneck && (
+            <span className={`px-1.5 py-0.5 text-[10px] font-bold uppercase rounded-full ${
+              bottleneck.severity === 'high'
+                ? 'bg-red-600/30 text-red-400'
+                : bottleneck.severity === 'medium'
+                ? 'bg-amber-600/30 text-amber-400'
+                : 'bg-green-600/30 text-green-400'
+            }`}>
+              {bottleneck.severity}
+            </span>
+          )}
+        </div>
         <div className="flex gap-1">
           {dept.is_closed && (
             <span className="px-2 py-0.5 bg-red-600/30 text-red-400 text-xs rounded-full">Closed</span>
@@ -33,6 +57,13 @@ export function DepartmentCard({ dept }: Props) {
         </div>
       </div>
 
+      {/* Pressure bar */}
+      {utilization && (
+        <div className="mb-2">
+          <PressureBar utilization={utilization} />
+        </div>
+      )}
+
       {/* Summary row */}
       <div className="flex items-center gap-3 mb-3">
         <div className="text-lg font-medium text-white">
@@ -42,7 +73,7 @@ export function DepartmentCard({ dept }: Props) {
           {bedsLeft === Infinity ? '~' : bedsLeft} <span className="text-xs text-gray-500">beds free</span>
         </div>
         {totalWaiting > 0 && (
-          <span className="px-2 py-0.5 bg-yellow-600/20 text-yellow-400 text-xs font-medium rounded-full">
+          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${waitingSeverityClass}`}>
             {totalWaiting} waiting
           </span>
         )}

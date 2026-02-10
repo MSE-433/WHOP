@@ -31,6 +31,9 @@ class ParsedRecommendation:
     expected_cost_impact: float = 0.0
     risk_flags: list[str] = field(default_factory=list)
     confidence: float = 0.0
+    reasoning_steps: list[str] = field(default_factory=list)
+    cost_breakdown: dict = field(default_factory=dict)
+    key_tradeoffs: list[str] = field(default_factory=list)
 
 
 def parse_llm_response(raw_text: str, step: StepType) -> ParsedRecommendation:
@@ -38,7 +41,10 @@ def parse_llm_response(raw_text: str, step: StepType) -> ParsedRecommendation:
     data = _extract_json(raw_text)
 
     reasoning = data.get("reasoning", "")
-    confidence = float(data.get("confidence", 0.0))
+    try:
+        confidence = float(data.get("confidence", 0.0))
+    except (ValueError, TypeError):
+        confidence = 0.5  # default when LLM returns non-numeric confidence
     risk_flags = data.get("risk_flags", [])
     if not isinstance(risk_flags, list):
         risk_flags = []
@@ -58,11 +64,27 @@ def parse_llm_response(raw_text: str, step: StepType) -> ParsedRecommendation:
 
     action = parser(action_data)
 
+    # Optional enhanced fields from LLM
+    reasoning_steps = data.get("reasoning_steps", [])
+    if not isinstance(reasoning_steps, list):
+        reasoning_steps = []
+
+    cost_breakdown = data.get("cost_breakdown", {})
+    if not isinstance(cost_breakdown, dict):
+        cost_breakdown = {}
+
+    key_tradeoffs = data.get("key_tradeoffs", [])
+    if not isinstance(key_tradeoffs, list):
+        key_tradeoffs = []
+
     return ParsedRecommendation(
         action=action,
         reasoning=reasoning,
         confidence=confidence,
         risk_flags=risk_flags,
+        reasoning_steps=[str(s) for s in reasoning_steps],
+        cost_breakdown=cost_breakdown,
+        key_tradeoffs=[str(s) for s in key_tradeoffs],
     )
 
 
@@ -200,31 +222,39 @@ def _parse_closed_action(data: dict) -> ClosedAction:
 def _parse_staffing_action(data: dict) -> StaffingAction:
     """Parse staffing action."""
     extra_staff = {}
-    for dept_str, count in data.get("extra_staff", {}).items():
-        try:
-            dept = _parse_dept_id(dept_str)
-            extra_staff[dept] = int(count)
-        except (ParseError, ValueError):
-            continue
+    raw_extra = data.get("extra_staff", {})
+    if isinstance(raw_extra, dict):
+        for dept_str, count in raw_extra.items():
+            try:
+                dept = _parse_dept_id(dept_str)
+                extra_staff[dept] = int(count)
+            except (ParseError, ValueError):
+                continue
 
     return_extra = {}
-    for dept_str, count in data.get("return_extra", {}).items():
-        try:
-            dept = _parse_dept_id(dept_str)
-            return_extra[dept] = int(count)
-        except (ParseError, ValueError):
-            continue
+    raw_return = data.get("return_extra", {})
+    if isinstance(raw_return, dict):
+        for dept_str, count in raw_return.items():
+            try:
+                dept = _parse_dept_id(dept_str)
+                return_extra[dept] = int(count)
+            except (ParseError, ValueError):
+                continue
 
     transfers = []
-    for item in data.get("transfers", []):
-        try:
-            transfers.append(StaffTransfer(
-                from_dept=_parse_dept_id(str(item.get("from_dept", ""))),
-                to_dept=_parse_dept_id(str(item.get("to_dept", ""))),
-                count=int(item.get("count", 1)),
-            ))
-        except (ParseError, ValueError, TypeError):
-            continue
+    raw_transfers = data.get("transfers", [])
+    if isinstance(raw_transfers, list):
+        for item in raw_transfers:
+            try:
+                if not isinstance(item, dict):
+                    continue
+                transfers.append(StaffTransfer(
+                    from_dept=_parse_dept_id(str(item.get("from_dept", ""))),
+                    to_dept=_parse_dept_id(str(item.get("to_dept", ""))),
+                    count=int(item.get("count", 1)),
+                ))
+            except (ParseError, ValueError, TypeError, AttributeError):
+                continue
 
     return StaffingAction(
         extra_staff=extra_staff,

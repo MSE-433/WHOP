@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
-import type { CustomGameConfig, DeptConfig } from '../../api/client';
+import type { CustomGameConfig, DeptConfig, CostConfig } from '../../api/client';
 import type { DepartmentId } from '../../types/game';
 import { DEPT_NAMES, DEPT_TEXT } from '../../utils/formatters';
 
@@ -13,6 +13,31 @@ const DEFAULTS: Record<DepartmentId, { patients: number; core_staff: number; bed
   cc: { patients: 12, core_staff: 13, bed_capacity: 18 },
   sd: { patients: 20, core_staff: 24, bed_capacity: 30 },
 };
+
+type CostKey = keyof CostConfig;
+
+interface CostField {
+  key: CostKey;
+  label: string;
+  defaultValue: number;
+}
+
+const COST_FIELDS: CostField[] = [
+  { key: 'er_diversion_financial', label: 'ER Diversion (Financial)', defaultValue: 5000 },
+  { key: 'er_diversion_quality', label: 'ER Diversion (Quality)', defaultValue: 200 },
+  { key: 'er_waiting_financial', label: 'ER Waiting (Financial)', defaultValue: 150 },
+  { key: 'er_waiting_quality', label: 'ER Waiting (Quality)', defaultValue: 20 },
+  { key: 'extra_staff_financial', label: 'Extra Staff (Financial)', defaultValue: 40 },
+  { key: 'extra_staff_quality', label: 'Extra Staff (Quality)', defaultValue: 5 },
+  { key: 'arrivals_waiting_financial', label: 'Dept Arrivals Waiting (Financial)', defaultValue: 3750 },
+  { key: 'arrivals_waiting_quality', label: 'Dept Arrivals Waiting (Quality)', defaultValue: 20 },
+  { key: 'requests_waiting_financial', label: 'Transfer Requests Waiting (Financial)', defaultValue: 0 },
+  { key: 'requests_waiting_quality', label: 'Transfer Requests Waiting (Quality)', defaultValue: 20 },
+];
+
+const COST_DEFAULTS: Record<CostKey, number> = Object.fromEntries(
+  COST_FIELDS.map((f) => [f.key, f.defaultValue])
+) as Record<CostKey, number>;
 
 type UnlimitedFlags = Record<DepartmentId, Record<keyof DeptConfig, boolean>>;
 
@@ -27,8 +52,10 @@ function initUnlimited(): UnlimitedFlags {
 export function StartScreen() {
   const { loading, error, newGame } = useGameStore();
   const [showCustom, setShowCustom] = useState(false);
+  const [showCosts, setShowCosts] = useState(false);
   const [params, setParams] = useState(DEFAULTS);
   const [unlimited, setUnlimited] = useState<UnlimitedFlags>(initUnlimited);
+  const [costParams, setCostParams] = useState<Record<CostKey, number>>({ ...COST_DEFAULTS });
 
   function updateDept(dept: DepartmentId, field: keyof DeptConfig, value: string) {
     const num = parseInt(value, 10);
@@ -46,38 +73,66 @@ export function StartScreen() {
     }));
   }
 
+  function updateCost(key: CostKey, value: string) {
+    const num = parseInt(value, 10);
+    if (isNaN(num) || num < 0) return;
+    setCostParams((prev) => ({ ...prev, [key]: num }));
+  }
+
   function handleStart() {
-    if (!showCustom) {
+    if (!showCustom && !showCosts) {
       newGame();
       return;
     }
     const config: CustomGameConfig = {};
-    for (const dept of DEPT_ORDER) {
-      const d = params[dept];
-      const def = DEFAULTS[dept];
-      const changes: DeptConfig = {};
-      let hasChange = false;
 
-      for (const field of FIELDS) {
-        if (unlimited[dept][field]) {
-          changes[field] = -1; // -1 = unlimited in API
-          hasChange = true;
-        } else if (d[field] !== def[field]) {
-          changes[field] = d[field];
-          hasChange = true;
+    // Department overrides
+    if (showCustom) {
+      for (const dept of DEPT_ORDER) {
+        const d = params[dept];
+        const def = DEFAULTS[dept];
+        const changes: DeptConfig = {};
+        let hasChange = false;
+
+        for (const field of FIELDS) {
+          if (unlimited[dept][field]) {
+            changes[field] = -1;
+            hasChange = true;
+          } else if (d[field] !== def[field]) {
+            changes[field] = d[field];
+            hasChange = true;
+          }
+        }
+
+        if (hasChange) {
+          (config as Record<string, DeptConfig>)[dept] = changes;
         }
       }
+    }
 
-      if (hasChange) {
-        (config as Record<string, DeptConfig>)[dept] = changes;
+    // Cost overrides
+    if (showCosts) {
+      const costOverrides: CostConfig = {};
+      let hasCostChange = false;
+      for (const field of COST_FIELDS) {
+        if (costParams[field.key] !== field.defaultValue) {
+          (costOverrides as Record<string, number>)[field.key] = costParams[field.key];
+          hasCostChange = true;
+        }
+      }
+      if (hasCostChange) {
+        config.costs = costOverrides;
       }
     }
-    newGame(Object.keys(config).length > 0 ? config : undefined);
+
+    const hasAnyConfig = Object.keys(config).length > 0;
+    newGame(hasAnyConfig ? config : undefined);
   }
 
   function handleReset() {
     setParams(DEFAULTS);
     setUnlimited(initUnlimited());
+    setCostParams({ ...COST_DEFAULTS });
   }
 
   function renderCell(dept: DepartmentId, field: keyof DeptConfig) {
@@ -126,13 +181,20 @@ export function StartScreen() {
           </p>
         </div>
 
-        {/* Toggle custom params */}
-        <div className="flex justify-center">
+        {/* Toggle buttons */}
+        <div className="flex justify-center gap-4">
           <button
             onClick={() => setShowCustom(!showCustom)}
             className="text-sm text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
           >
-            {showCustom ? 'Hide custom parameters' : 'Customize starting parameters'}
+            {showCustom ? 'Hide starting parameters' : 'Customize starting parameters'}
+          </button>
+          <span className="text-gray-600">|</span>
+          <button
+            onClick={() => setShowCosts(!showCosts)}
+            className="text-sm text-blue-400 hover:text-blue-300 transition-colors cursor-pointer"
+          >
+            {showCosts ? 'Hide cost settings' : 'Customize cost constants'}
           </button>
         </div>
 
@@ -173,6 +235,56 @@ export function StartScreen() {
               Click the &infin; button to toggle unlimited for any parameter.
               Unlimited beds means hallway overflow with no cap.
               Unlimited patients/staff uses 999 as a large value.
+            </p>
+          </div>
+        )}
+
+        {/* Cost constants form */}
+        {showCosts && (
+          <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-gray-300">Cost Constants</h3>
+              <button
+                onClick={() => setCostParams({ ...COST_DEFAULTS })}
+                className="text-xs text-gray-500 hover:text-gray-300 transition-colors cursor-pointer"
+              >
+                Reset to defaults
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {COST_FIELDS.map((field) => {
+                const isChanged = costParams[field.key] !== field.defaultValue;
+                return (
+                  <div key={field.key} className="flex items-center justify-between gap-2 bg-gray-900/50 rounded px-3 py-2">
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs text-gray-300 truncate">{field.label}</span>
+                      {isChanged && (
+                        <span className="text-[10px] text-amber-400">
+                          default: ${field.defaultValue.toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-gray-500 text-xs">$</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={costParams[field.key]}
+                        onChange={(e) => updateCost(field.key, e.target.value)}
+                        className={`w-20 bg-gray-700 border rounded px-2 py-1 text-sm text-center ${
+                          isChanged ? 'border-amber-500/60 text-amber-300' : 'border-gray-600 text-white'
+                        } focus:border-blue-500 focus:outline-none`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="text-xs text-gray-600">
+              Financial costs affect the monetary score. Quality costs affect the quality score.
+              Both are tracked per round and accumulated over the 24-round game.
             </p>
           </div>
         )}

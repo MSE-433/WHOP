@@ -16,7 +16,11 @@ from data.card_sequences import get_exits
 
 
 def get_available_exits(state: GameState) -> dict[DepartmentId, int]:
-    """Get the number of exits available per department this round."""
+    """Get the number of exits available per department this round.
+
+    Uses exit_overrides from state if set (from card override in event step),
+    otherwise reads from the fixed card sequences.
+    """
     exits: dict[DepartmentId, int] = {}
     for dept_id in state.departments:
         # Check for no_exits event
@@ -24,6 +28,8 @@ def get_available_exits(state: GameState) -> dict[DepartmentId, int]:
         has_no_exits = any(e.effect.no_exits for e in dept.active_events)
         if has_no_exits:
             exits[dept_id] = 0
+        elif state.exit_overrides and dept_id in state.exit_overrides:
+            exits[dept_id] = state.exit_overrides[dept_id]
         else:
             exits[dept_id] = get_exits(dept_id, state.round_number)
     return exits

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from models.enums import DepartmentId, StepType
 from models.department import DepartmentState, StaffState
 from models.game_state import GameState
+from models.cost import CostConstants
 
 
 # Defaults matching the FNER board game
@@ -35,12 +36,27 @@ class DeptConfig(BaseModel):
     bed_capacity: int | None = None
 
 
+class CostConfig(BaseModel):
+    """Optional overrides for cost constants."""
+    er_diversion_financial: int | None = None
+    er_diversion_quality: int | None = None
+    er_waiting_financial: int | None = None
+    er_waiting_quality: int | None = None
+    extra_staff_financial: int | None = None
+    extra_staff_quality: int | None = None
+    arrivals_waiting_financial: int | None = None
+    arrivals_waiting_quality: int | None = None
+    requests_waiting_financial: int | None = None
+    requests_waiting_quality: int | None = None
+
+
 class CustomGameConfig(BaseModel):
     """Optional overrides for starting state, keyed by department id."""
     er: DeptConfig | None = None
     surgery: DeptConfig | None = None
     cc: DeptConfig | None = None
     sd: DeptConfig | None = None
+    costs: CostConfig | None = None
 
     def get(self, dept_id: DepartmentId) -> DeptConfig | None:
         return {
@@ -95,9 +111,17 @@ def create_starting_state(
             bed_capacity=bed_cap,
         )
 
+    # Build cost constants (apply overrides if provided)
+    costs = CostConstants()
+    if config and config.costs:
+        cost_overrides = {k: v for k, v in config.costs.model_dump().items() if v is not None}
+        if cost_overrides:
+            costs = CostConstants(**{**costs.model_dump(), **cost_overrides})
+
     return GameState(
         game_id=game_id,
         round_number=1,
         current_step=StepType.EVENT,
         departments=departments,
+        cost_constants=costs,
     )

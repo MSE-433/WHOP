@@ -7,19 +7,20 @@ costs for the current round.
 from models.enums import DepartmentId
 from models.department import DepartmentState
 from models.game_state import GameState, RoundCostEntry
-from models.cost import COST_CONSTANTS
+from models.cost import CostConstants
 
 
-def calculate_department_cost(dept: DepartmentState) -> tuple[int, int, dict[str, int]]:
+def calculate_department_cost(dept: DepartmentState, c: CostConstants | None = None) -> tuple[int, int, dict[str, int]]:
     """Calculate financial and quality cost for one department this round.
 
     Returns: (financial, quality, details_dict)
     """
+    if c is None:
+        c = CostConstants()
+
     financial = 0
     quality = 0
     details: dict[str, int] = {}
-
-    c = COST_CONSTANTS
 
     if dept.id == DepartmentId.ER:
         # Patients waiting (walk-ins waiting for admission)
@@ -71,14 +72,13 @@ def calculate_round_costs(state: GameState) -> RoundCostEntry:
     total_quality = 0
     all_details: dict[str, int] = {}
 
+    c = state.cost_constants
+
     for dept in state.departments.values():
-        f, q, details = calculate_department_cost(dept)
+        f, q, details = calculate_department_cost(dept, c)
         total_financial += f
         total_quality += q
         all_details.update(details)
-
-    # ER diversion costs
-    c = COST_CONSTANTS
     if state.ambulances_diverted_this_round > 0:
         f = state.ambulances_diverted_this_round * c.er_diversion_financial
         q = state.ambulances_diverted_this_round * c.er_diversion_quality

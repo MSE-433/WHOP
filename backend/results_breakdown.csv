@@ -1,0 +1,13 @@
+department,category,financial,quality,combined
+Emergency,waiting,12150,1620,13770
+Emergency,extra_staff,19120,2390,21510
+Emergency,diversion,15000,600,15600
+Emergency,TOTAL,46270,4610,50880
+Surgery,waiting,15000,80,15080
+Surgery,extra_staff,2520,315,2835
+Surgery,TOTAL,17520,395,17915
+Critical Care,waiting,7500,40,7540
+Critical Care,extra_staff,1160,145,1305
+Critical Care,TOTAL,8660,185,8845
+Step-Down,waiting,3750,20,3770
+Step-Down,TOTAL,3750,20,3770

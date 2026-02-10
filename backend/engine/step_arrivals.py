@@ -96,6 +96,65 @@ def _free_staff(dept, count: int) -> None:
     dept.staff.core_busy -= core_free
 
 
+def get_card_arrivals_this_round(state: GameState) -> dict:
+    """Return the arrivals that were added to each dept during process_new_arrivals.
+
+    Uses the same logic as process_new_arrivals to compute what was actually added,
+    accounting for diversion and shift_change events.
+    """
+    from models.enums import DepartmentId as DId
+
+    rn = state.round_number
+    idx = rn - 1
+    result = {}
+
+    def has_shift_change(dept_id):
+        return any(e.effect.shift_change for e in state.departments[dept_id].active_events)
+
+    # ER
+    if has_shift_change(DId.ER):
+        result[DId.ER] = 0
+    else:
+        walkins = get_er_walkin(rn)
+        ambulance = get_er_ambulance(rn) if not state.er_diverted_last_round else 0
+        result[DId.ER] = walkins + ambulance
+
+    # Surgery
+    if has_shift_change(DId.SURGERY):
+        result[DId.SURGERY] = 0
+    else:
+        result[DId.SURGERY] = SURGERY_ARRIVALS[idx]
+
+    # Critical Care
+    if has_shift_change(DId.CRITICAL_CARE):
+        result[DId.CRITICAL_CARE] = 0
+    else:
+        result[DId.CRITICAL_CARE] = CC_ARRIVALS[idx]
+
+    # Step Down
+    if has_shift_change(DId.STEP_DOWN):
+        result[DId.STEP_DOWN] = 0
+    else:
+        result[DId.STEP_DOWN] = SD_ARRIVALS[idx]
+
+    return result
+
+
+def apply_arrival_overrides(state: GameState, overrides: dict) -> GameState:
+    """Adjust arrivals_waiting based on user overrides.
+
+    Computes delta between the card value and the user override,
+    then adjusts arrivals_waiting accordingly.
+    """
+    card_arrivals = get_card_arrivals_this_round(state)
+    for dept_id, override_count in overrides.items():
+        card_count = card_arrivals.get(dept_id, 0)
+        delta = override_count - card_count
+        dept = state.departments[dept_id]
+        dept.arrivals_waiting = max(0, dept.arrivals_waiting + delta)
+    return state
+
+
 def apply_arrivals_action(state: GameState, action: ArrivalsAction) -> GameState:
     """Apply player's admission and transfer acceptance decisions."""
     # Process admissions (from arrivals_waiting)

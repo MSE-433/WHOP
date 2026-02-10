@@ -35,7 +35,8 @@ export const DEPT_TEXT: Record<DepartmentId, string> = {
   sd: 'text-green-400',
 };
 
-export function formatCurrency(amount: number): string {
+export function formatCurrency(amount: number | undefined | null): string {
+  if (amount == null || isNaN(amount)) return '$0';
   return '$' + amount.toLocaleString();
 }
 

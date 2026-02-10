@@ -9,10 +9,10 @@ This is the main entry point for game operations. It:
 
 from models.enums import StepType, STEP_ORDER, DepartmentId
 from models.game_state import GameState
-from models.actions import ArrivalsAction, ExitsAction, ClosedAction, StaffingAction
+from models.actions import ArrivalsAction, ExitsAction, ClosedAction, StaffingAction, CardOverrides
 from data.starting_state import create_starting_state, CustomGameConfig
 from engine.event_handler import is_event_round, draw_events, apply_events
-from engine.step_arrivals import process_new_arrivals, mature_transfers, apply_arrivals_action
+from engine.step_arrivals import process_new_arrivals, mature_transfers, apply_arrivals_action, apply_arrival_overrides
 from engine.step_exits import apply_exits_action, get_available_exits
 from engine.step_closed import apply_closed_action
 from engine.step_staffing import apply_staffing_action
@@ -34,12 +34,16 @@ def create_game(game_id: str | None = None, config: CustomGameConfig | None = No
 def process_event_step(
     state: GameState,
     event_seed: int | None = None,
+    card_overrides: CardOverrides | None = None,
 ) -> GameState:
     """Step 0: Process events if this is an event round.
 
     Also processes new arrivals and matures transfers so that
     arrivals_waiting/requests_waiting are populated in the state
     before the user makes decisions in the ARRIVALS step.
+
+    If card_overrides are provided, arrival values replace the card
+    sequence values and exit overrides are stored for the exits step.
     """
     if state.current_step != StepType.EVENT:
         raise ValidationError(f"Expected EVENT step, got {state.current_step}")
@@ -52,6 +56,13 @@ def process_event_step(
     state = process_new_arrivals(state)
     state = mature_transfers(state)
 
+    # Apply card overrides if provided
+    if card_overrides:
+        if card_overrides.arrivals:
+            state = apply_arrival_overrides(state, card_overrides.arrivals)
+        if card_overrides.exits:
+            state.exit_overrides = card_overrides.exits
+
     # Advance to arrivals
     state.current_step = StepType.ARRIVALS
     return state
@@ -62,9 +73,14 @@ def process_arrivals_step(state: GameState, action: ArrivalsAction) -> GameState
 
     New arrivals and transfer maturation are already processed during the
     event step, so arrivals_waiting/requests_waiting are already populated.
+    If arrival_overrides are provided, adjust arrivals_waiting before validation.
     """
     if state.current_step != StepType.ARRIVALS:
         raise ValidationError(f"Expected ARRIVALS step, got {state.current_step}")
+
+    # Apply arrival overrides if any (adjust arrivals_waiting before validation)
+    if action.arrival_overrides:
+        state = apply_arrival_overrides(state, action.arrival_overrides)
 
     # Validate and apply player decisions
     validate_arrivals(state, action)

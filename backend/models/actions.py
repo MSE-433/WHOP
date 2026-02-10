@@ -23,6 +23,7 @@ class ArrivalsAction(BaseModel):
 
     admissions: list[AdmitDecision] = []
     transfer_accepts: list[AcceptTransferDecision] = []
+    arrival_overrides: dict[DepartmentId, int] = {}  # dept -> new arrival count for this round
 
 
 class ExitRouting(BaseModel):
@@ -61,3 +62,10 @@ class StaffingAction(BaseModel):
     extra_staff: dict[DepartmentId, int] = {}     # dept -> count to call
     return_extra: dict[DepartmentId, int] = {}    # dept -> count to return
     transfers: list[StaffTransfer] = []
+
+
+class CardOverrides(BaseModel):
+    """Optional overrides for card draw values in the event step."""
+
+    arrivals: dict[DepartmentId, int] = {}  # dept -> arrival count for this round
+    exits: dict[DepartmentId, int] = {}     # dept -> exit count for this round

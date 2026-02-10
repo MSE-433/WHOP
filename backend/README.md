@@ -52,6 +52,29 @@ python3 -m venv venv
 
 The server listens on port 8000. The frontend dev server proxies `/api` requests here.
 
+### Run full AI game (no server needed)
+
+```bash
+# Run AI-guided 24-round game and compare against physical board-game baseline
+./venv/bin/python scripts/run_full_game.py
+
+# Export results to CSV files
+./venv/bin/python scripts/run_full_game.py --csv results
+# Creates: results_rounds.csv, results_departments.csv, results_breakdown.csv, results_summary.csv
+
+# Quiet mode (skip per-round output, just show totals + CSV)
+./venv/bin/python scripts/run_full_game.py --quiet --csv results
+
+# Custom event seed
+./venv/bin/python scripts/run_full_game.py --seed 123 --csv results
+```
+
+CSV output files:
+- `PREFIX_rounds.csv` — per-round financial + quality costs
+- `PREFIX_departments.csv` — department comparison: With IDSS vs Without IDSS
+- `PREFIX_breakdown.csv` — AI cost breakdown by category (waiting / extra staff / diversion)
+- `PREFIX_summary.csv` — overall totals with savings percentage
+
 ## Testing
 
 ```bash

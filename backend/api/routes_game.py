@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from models.game_state import GameState
-from models.actions import ArrivalsAction, ExitsAction, ClosedAction, StaffingAction
+from models.actions import ArrivalsAction, ExitsAction, ClosedAction, StaffingAction, CardOverrides
 from engine.game_engine import (
     create_game,
     process_event_step,
@@ -19,6 +19,8 @@ from engine.game_engine import (
     process_paperwork_step,
 )
 from data.starting_state import CustomGameConfig
+from data.card_sequences import get_er_walkin, get_er_ambulance, get_exits
+from models.enums import DepartmentId
 from engine.validator import ValidationError
 from db.database import get_db
 from db import repository as repo
@@ -76,12 +78,13 @@ def get_state(game_id: str):
 
 
 @router.post("/{game_id}/step/event")
-def step_event(game_id: str, event_seed: int | None = None):
+def step_event(game_id: str, event_seed: int | None = None, card_overrides: CardOverrides | None = None):
     """Step 0: Process events (occurs at hours 6, 9, 12, 17, 21).
 
     Args:
         game_id: UUID of the game session.
         event_seed: Optional RNG seed for deterministic event drawing (testing).
+        card_overrides: Optional overrides for arrival/exit card values.
 
     Returns:
         Updated GameState after events are applied.
@@ -91,7 +94,7 @@ def step_event(game_id: str, event_seed: int | None = None):
     """
     state = _load_or_404(game_id)
     try:
-        state = process_event_step(state, event_seed=event_seed)
+        state = process_event_step(state, event_seed=event_seed, card_overrides=card_overrides)
     except ValidationError as e:
         with get_db() as conn:
             repo.log_action(conn, game_id, state.round_number, "event", "{}", "error", str(e))
@@ -219,6 +222,34 @@ def step_paperwork(game_id: str):
     with get_db() as conn:
         repo.log_action(conn, game_id, state.round_number, "paperwork", "{}")
     return state.model_dump()
+
+
+@router.get("/{game_id}/round-cards/{round_number}")
+def round_cards(game_id: str, round_number: int):
+    """Get the card data (arrivals/exits) for a specific round.
+
+    Returns per-department arrival and exit counts from the fixed card sequences.
+    """
+    _load_or_404(game_id)  # verify game exists
+    if round_number < 1 or round_number > 24:
+        raise HTTPException(status_code=400, detail="Round must be 1-24")
+    return _build_round_cards(round_number)
+
+
+def _build_round_cards(round_number: int) -> dict:
+    """Build a dict of card data for the given round."""
+    from data.card_sequences import get_arrivals as _get_arrivals
+
+    departments = {}
+    for dept_id in DepartmentId:
+        arrivals = _get_arrivals(dept_id, round_number)
+        exits = get_exits(dept_id, round_number)
+        entry: dict = {"arrivals": arrivals, "exits": exits}
+        if dept_id == DepartmentId.ER:
+            entry["walkin"] = get_er_walkin(round_number)
+            entry["ambulance"] = get_er_ambulance(round_number)
+        departments[dept_id.value] = entry
+    return {"round": round_number, "departments": departments}
 
 
 @router.get("/{game_id}/history")
