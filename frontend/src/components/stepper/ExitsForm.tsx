@@ -1,51 +1,94 @@
-import { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
-import type { ExitsAction, ExitRouting, DepartmentId } from '../../types/game';
+import type { ExitRouting, DepartmentId } from '../../types/game';
 import { ALL_DEPARTMENTS } from '../../types/game';
 import { DEPT_NAMES, DEPT_TEXT } from '../../utils/formatters';
-import { FLOW_GRAPH } from '../../utils/flowGraph';
+
+const _ER_PATTERN = ["out", "out", "out", "out", "out", "surgery", "out", "stepdown", "out", "criticalcare", "out", "criticalcare", "out", "stepdown", "out"];
+
+const EXIT_SEQUENCES: Record<DepartmentId, string[]> = {
+  er: Array(6).fill(_ER_PATTERN).flat(), // Repeat pattern 6 times to cover all 80 exits
+  surgery: ["stepdown", "stepdown", "stepdown", "criticalcare", "stepdown", "stepdown", "criticalcare", "criticalcare", "stepdown", "stepdown", "stepdown", "criticalcare", "stepdown", "stepdown", "criticalcare", "criticalcare"],
+  cc: Array(100).fill("stepdown"), // Always stepdown
+  sd: Array(100).fill("out"), // Always out
+};
+
+const EXIT_COUNTS: Record<DepartmentId, number[]> = {
+  er: [5, 2, 2, 4, 4, 2, 5, 5, 3, 1, 4, 3, 5, 2, 2, 4, 4, 2, 5, 5, 3, 1, 4, 3],
+  surgery: [0, 0, 1, 2, 0, 0, 1, 2, 0, 0, 1, 2, 0, 0, 1, 2, 0, 0, 1, 2, 0, 0, 1, 2],
+  cc: [0, 0, 1, 0, 1, 2, 0, 0, 1, 0, 1, 2, 0, 0, 1, 0, 1, 2, 0, 0, 1, 0, 1, 2],
+  sd: [3, 2, 4, 3, 1, 2, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 3, 2, 4, 3, 1, 2, 3, 2],
+};
+
+// Map sequence destination strings to DepartmentIds
+function mapDestinationToDeptId(dest: string): DepartmentId | null {
+  switch (dest) {
+    case 'stepdown':
+      return 'sd';
+    case 'surgery':
+      return 'surgery';
+    case 'criticalcare':
+      return 'cc';
+    case 'out':
+      return null; // discharge, not a dept
+    default:
+      return null;
+  }
+}
 
 export function ExitsForm() {
-  const { state, loading, recommendation, submitExits } = useGameStore();
-
-  // Track walkout counts and transfer counts per department
-  const [walkouts, setWalkouts] = useState<Record<DepartmentId, number>>(
-    { er: 0, surgery: 0, cc: 0, sd: 0 }
-  );
-  const [transfers, setTransfers] = useState<Record<string, number>>({});
+  const { state, loading, submitExits } = useGameStore();
 
   if (!state) return null;
 
-  // Compute available exits from game state
-  // During exits step, patients_in_beds + patients_in_hallway represent those who can exit
-  // The server validates the actual available exits count
-
-  function applyRecommendation() {
-    if (!recommendation?.recommended_action) return;
-    const action = recommendation.recommended_action as unknown as ExitsAction;
-    const newWalkouts: Record<DepartmentId, number> = { er: 0, surgery: 0, cc: 0, sd: 0 };
-    const newTransfers: Record<string, number> = {};
-    for (const r of action.routings ?? []) {
-      newWalkouts[r.from_dept as DepartmentId] = r.walkout_count;
-      for (const [dest, count] of Object.entries(r.transfers ?? {})) {
-        newTransfers[`${r.from_dept}-${dest}`] = count;
+  function getExitOutcomes(deptId: DepartmentId): { destination: string; count: number }[] {
+    const roundIdx = state!.round_number - 1;
+    const exitCount = EXIT_COUNTS[deptId]?.[roundIdx] ?? 0;
+    const sequence = EXIT_SEQUENCES[deptId] ?? [];
+    
+    // Calculate cumulative offset: how many exits occurred in all previous rounds
+    let offset = 0;
+    for (let r = 0; r < roundIdx; r++) {
+      offset += EXIT_COUNTS[deptId]?.[r] ?? 0;
+    }
+    
+    const outcomes: { destination: string; count: number }[] = [];
+    
+    for (let i = 0; i < exitCount; i++) {
+      const dest = sequence[offset + i] ?? 'unknown';
+      const existing = outcomes.find((o) => o.destination === dest);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        outcomes.push({ destination: dest, count: 1 });
       }
     }
-    setWalkouts(newWalkouts);
-    setTransfers(newTransfers);
+    
+    return outcomes;
   }
 
   function handleSubmit() {
+    // Automatically build routings based on sequences
     const routings: ExitRouting[] = ALL_DEPARTMENTS
       .map((id) => {
+        const outcomes = getExitOutcomes(id);
         const transferMap: Record<DepartmentId, number> = {} as Record<DepartmentId, number>;
-        for (const dest of FLOW_GRAPH[id]) {
-          const count = transfers[`${id}-${dest}`] ?? 0;
-          if (count > 0) transferMap[dest] = count;
+        let walkoutCount = 0;
+
+        for (const outcome of outcomes) {
+          if (outcome.destination === 'out') {
+            walkoutCount += outcome.count;
+          } else if (outcome.destination === 'stepdown') {
+            transferMap['sd'] = (transferMap['sd'] ?? 0) + outcome.count;
+          } else if (outcome.destination === 'surgery') {
+            transferMap['surgery'] = (transferMap['surgery'] ?? 0) + outcome.count;
+          } else if (outcome.destination === 'criticalcare') {
+            transferMap['cc'] = (transferMap['cc'] ?? 0) + outcome.count;
+          }
         }
+
         return {
           from_dept: id,
-          walkout_count: walkouts[id],
+          walkout_count: walkoutCount,
           transfers: transferMap,
         };
       })
@@ -54,73 +97,47 @@ export function ExitsForm() {
     submitExits({ routings });
   }
 
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter' && !(e.target instanceof HTMLInputElement && e.target.type === 'number')) {
-      handleSubmit();
-    }
-  }
-
   return (
-    <div className="space-y-4" onKeyDown={handleKeyDown}>
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-lg">Exits</h3>
-        {recommendation && (
-          <button
-            onClick={applyRecommendation}
-            className="text-xs px-2 py-1 bg-green-700/50 hover:bg-green-700 text-green-300 rounded transition-colors cursor-pointer"
-          >
-            Apply AI Suggestion
-          </button>
-        )}
-      </div>
+    <div className="space-y-4">
+      <h3 className="font-semibold text-lg">Exits</h3>
 
       <p className="text-gray-400 text-xs">
-        Route exiting patients: discharge (walkout) or transfer to another department.
+        Exits are automatically routed per predetermined sequences. Outcomes shown below.
       </p>
 
       {ALL_DEPARTMENTS.map((id) => {
-        const dept = state.departments[id];
-        const destinations = FLOW_GRAPH[id];
+        const outcomes = getExitOutcomes(id);
+        const totalExits = outcomes.reduce((sum, o) => sum + o.count, 0);
+
+        if (totalExits === 0) return null;
 
         return (
           <div key={id} className="bg-gray-800/50 rounded-lg p-3 space-y-2">
             <div className={`text-sm font-medium ${DEPT_TEXT[id]}`}>
               {DEPT_NAMES[id]}
               <span className="text-gray-500 ml-2 text-xs">
-                ({dept.patients_in_beds + dept.patients_in_hallway} patients)
+                ({totalExits} exits)
               </span>
             </div>
 
-            {/* Walkout */}
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm text-gray-300">Discharge</span>
-              <input
-                type="number"
-                min={0}
-                value={walkouts[id]}
-                onChange={(e) => setWalkouts((prev) => ({ ...prev, [id]: Math.max(0, parseInt(e.target.value) || 0) }))}
-                className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-center"
-              />
+            {/* Show sequence outcomes */}
+            <div className="space-y-1">
+              {outcomes.map((outcome, idx) => {
+                let destName: string;
+                if (outcome.destination === 'out') {
+                  destName = 'Discharge';
+                } else {
+                  const mappedDeptId = mapDestinationToDeptId(outcome.destination);
+                  destName = mappedDeptId ? `Transfer to ${DEPT_NAMES[mappedDeptId]}` : `Transfer to ${outcome.destination}`;
+                }
+                return (
+                  <div key={idx} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="text-gray-300">{destName}</span>
+                    <span className="text-blue-300 font-semibold">{outcome.count}</span>
+                  </div>
+                );
+              })}
             </div>
-
-            {/* Transfers */}
-            {destinations.map((dest) => (
-              <div key={dest} className="flex items-center justify-between gap-2">
-                <span className="text-sm text-gray-300">
-                  Transfer to {DEPT_NAMES[dest]}
-                </span>
-                <input
-                  type="number"
-                  min={0}
-                  value={transfers[`${id}-${dest}`] ?? 0}
-                  onChange={(e) => setTransfers((prev) => ({
-                    ...prev,
-                    [`${id}-${dest}`]: Math.max(0, parseInt(e.target.value) || 0),
-                  }))}
-                  className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-center"
-                />
-              </div>
-            ))}
           </div>
         );
       })}
@@ -131,7 +148,7 @@ export function ExitsForm() {
           disabled={loading}
           className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 rounded-lg font-medium transition-colors cursor-pointer"
         >
-          {loading ? 'Processing...' : 'Submit Exits'}
+          {loading ? 'Processing...' : 'Continue'}
         </button>
       </div>
     </div>

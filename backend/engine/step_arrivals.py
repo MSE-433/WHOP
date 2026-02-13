@@ -66,17 +66,25 @@ def process_new_arrivals(state: GameState) -> GameState:
 
 
 def mature_transfers(state: GameState) -> GameState:
-    """Move matured outgoing transfers into destination requests_waiting."""
+    """Transfer patients directly to destination if staff available, else to requests_waiting."""
     for dept in state.departments.values():
         remaining_transfers = []
         for transfer in dept.outgoing_transfers:
             if transfer.rounds_remaining <= 1:
-                # Transfer matures — add to destination's requests_waiting
-                dest = state.departments[transfer.to_dept]
-                current = dest.requests_waiting.get(transfer.from_dept, 0)
-                dest.requests_waiting[transfer.from_dept] = current + transfer.count
-                # Free the staff in the sending department
+                # Transfer matures — free staff and bed in sending department
                 _free_staff(dept, transfer.count)
+                _remove_patients_from_dept(dept, transfer.count)
+                
+                # Try to admit directly to destination if staff and space available
+                dest = state.departments[transfer.to_dept]
+                for _ in range(transfer.count):
+                    if dest.staff.total_idle > 0 and (dest.has_hallway or dest.beds_available > 0):
+                        # Direct admission with free doctor
+                        _admit_patients(dest, 1)
+                    else:
+                        # No staff or space available, add to waiting queue
+                        current = dest.requests_waiting.get(transfer.from_dept, 0)
+                        dest.requests_waiting[transfer.from_dept] = current + 1
             else:
                 transfer.rounds_remaining -= 1
                 remaining_transfers.append(transfer)
@@ -94,6 +102,19 @@ def _free_staff(dept, count: int) -> None:
     to_free -= extra_free
     core_free = min(to_free, dept.staff.core_busy)
     dept.staff.core_busy -= core_free
+
+
+def _remove_patients_from_dept(dept, count: int) -> None:
+    """Remove patients from department (beds first, then hallway)."""
+    to_remove = count
+    # Remove from beds first
+    beds_removed = min(to_remove, dept.patients_in_beds)
+    dept.patients_in_beds -= beds_removed
+    to_remove -= beds_removed
+    # Then remove from hallway if any remain
+    if to_remove > 0 and dept.has_hallway:
+        hallway_removed = min(to_remove, dept.patients_in_hallway)
+        dept.patients_in_hallway -= hallway_removed
 
 
 def get_card_arrivals_this_round(state: GameState) -> dict:

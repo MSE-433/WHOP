@@ -84,13 +84,14 @@ def validate_arrivals(state: GameState, action: ArrivalsAction) -> None:
 # ---------------------------------------------------------------------------
 
 def validate_exits(state: GameState, action: ExitsAction) -> None:
-    """Validate Step 2: Exits decisions."""
+    """Validate Step 2: Exits decisions.
+    
+    Since exits are now fully automatic based on sequences, we only validate
+    that transfer directions are allowed. The actual counts are capped by
+    available patients in the backend processing.
+    """
     for routing in action.routings:
         dept = state.departments[routing.from_dept]
-
-        # Total routed must not exceed available exit count
-        # (exit count is set during step processing, stored temporarily)
-        total_routed = routing.walkout_count + sum(routing.transfers.values())
 
         if routing.walkout_count < 0:
             raise ValidationError(f"Cannot have negative walkouts from {dept.id}")
@@ -104,14 +105,9 @@ def validate_exits(state: GameState, action: ExitsAction) -> None:
                 raise ValidationError(
                     f"Transfer from {routing.from_dept} to {dest} not allowed"
                 )
-
-        # Transferred patients need staff in sending dept (staff stays with patient)
-        transfer_count = sum(routing.transfers.values())
-        if transfer_count > dept.staff.total_busy:
-            raise ValidationError(
-                f"{dept.id}: trying to transfer {transfer_count} patients "
-                f"but only {dept.staff.total_busy} busy staff available"
-            )
+        
+        # Note: We don't validate against available staff or patients here
+        # because exits are automatic and capped by dept.total_patients in step_exits.py
 
 
 # ---------------------------------------------------------------------------

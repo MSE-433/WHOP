@@ -2,7 +2,7 @@
 
 Flow:
 1. Read exit card values for this round
-2. Player decides: walk-out (leave system) vs transfer to another dept
+2. Apply automatic routing based on department rules (ER/Surgery/CC/SD rules)
 3. Walk-outs free their staff immediately and leave
 4. Transfers create outgoing_transfer with 1-round delay
    (patient + staff stay in sending dept until receiving dept accepts)
@@ -12,7 +12,7 @@ from models.enums import DepartmentId
 from models.game_state import GameState
 from models.department import TransferRequest
 from models.actions import ExitsAction
-from data.card_sequences import get_exits
+from data.card_sequences import get_exits, get_exit_routing
 
 
 def get_available_exits(state: GameState) -> dict[DepartmentId, int]:
@@ -36,60 +36,71 @@ def get_available_exits(state: GameState) -> dict[DepartmentId, int]:
 
 
 def apply_exits_action(state: GameState, action: ExitsAction) -> GameState:
-    """Apply player's exit routing decisions."""
+    """Apply automatic exit routing based on department rules.
+    
+    All exits are automatic and follow predetermined sequences:
+    - ER: exits follow ER_EXIT_SEQUENCE (some "out", some transfer to surgery/stepdown/cc)
+    - Surgery: exits follow SURGERY_EXIT_SEQUENCE (all transfer to stepdown or criticalcare)
+    - Critical Care: all exits transfer to Step Down
+    - Step Down: all exits are discharged (walk-out)
+    
+    Player input is ignored - all available exits are processed per sequences.
+    """
     available = get_available_exits(state)
 
     for routing in action.routings:
         dept = state.departments[routing.from_dept]
         max_exits = available.get(routing.from_dept, 0)
 
-        total_routed = routing.walkout_count + sum(routing.transfers.values())
-        # Cap at available exits and actual patients
-        actual_exits = min(total_routed, max_exits, dept.total_patients)
+        # All departments use all available exits and follow their sequences
+        actual_exits = min(max_exits, dept.total_patients)
 
         if actual_exits == 0:
             continue
 
-        # Process walk-outs first
-        walkouts = min(routing.walkout_count, actual_exits)
-        _discharge_patients(dept, walkouts)
-
-        # Process transfers
-        remaining = actual_exits - walkouts
-        for dest_id, count in routing.transfers.items():
-            transfer_count = min(count, remaining)
-            if transfer_count <= 0:
-                continue
-
-            # Create outgoing transfer (1-round delay)
-            dept.outgoing_transfers.append(
-                TransferRequest(
-                    from_dept=routing.from_dept,
-                    to_dept=dest_id,
-                    count=transfer_count,
-                    rounds_remaining=1,
-                )
-            )
-            # Note: patients and their staff stay in sending dept
-            # They are NOT discharged yet — staff remains busy
-            remaining -= transfer_count
+        # Apply automatic routing based on department sequences
+        exit_index = 0  # tracks position in exit sequence
+        for _ in range(actual_exits):
+            routing_dest = get_exit_routing(routing.from_dept, exit_index)
+            exit_index += 1
+            
+            if routing_dest == "out":
+                # Discharge patient
+                if dept.patients_in_beds > 0:
+                    dept.patients_in_beds -= 1
+                elif dept.patients_in_hallway > 0:
+                    dept.patients_in_hallway -= 1
+                else:
+                    break
+                
+                # Free one staff member
+                if dept.staff.extra_busy > 0:
+                    dept.staff.extra_busy -= 1
+                elif dept.staff.core_busy > 0:
+                    dept.staff.core_busy -= 1
+            else:
+                # Transfer to another department
+                dest_id = None
+                if routing_dest == "stepdown":
+                    dest_id = DepartmentId.STEP_DOWN
+                elif routing_dest == "surgery":
+                    dest_id = DepartmentId.SURGERY
+                elif routing_dest == "criticalcare":
+                    dest_id = DepartmentId.CRITICAL_CARE
+                
+                if dest_id:
+                    # Create outgoing transfer (1-round delay)
+                    dept.outgoing_transfers.append(
+                        TransferRequest(
+                            from_dept=routing.from_dept,
+                            to_dept=dest_id,
+                            count=1,
+                            rounds_remaining=1,
+                        )
+                    )
+                    # Note: patient and staff stay in sending dept until accepted
 
     return state
 
+    return state
 
-def _discharge_patients(dept, count: int) -> None:
-    """Remove patients from department and free their staff."""
-    for _ in range(count):
-        # Remove patient from beds first, then hallway
-        if dept.patients_in_beds > 0:
-            dept.patients_in_beds -= 1
-        elif dept.patients_in_hallway > 0:
-            dept.patients_in_hallway -= 1
-        else:
-            break  # no patients to discharge
-
-        # Free one staff member (extra busy first, then core busy)
-        if dept.staff.extra_busy > 0:
-            dept.staff.extra_busy -= 1
-        elif dept.staff.core_busy > 0:
-            dept.staff.core_busy -= 1
