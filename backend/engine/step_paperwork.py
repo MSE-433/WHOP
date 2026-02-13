@@ -18,7 +18,8 @@ from engine.event_handler import tick_events
 def process_paperwork(state: GameState) -> GameState:
     """Process end-of-round paperwork and advance to next round."""
 
-    # 1. Calculate and record costs
+    # 1. Calculate and record costs for current round
+    # (extra_incoming are NOT yet activated, so they're not charged)
     round_cost = calculate_round_costs(state)
     state.round_costs.append(round_cost)
     state.total_financial_cost += round_cost.financial
@@ -27,7 +28,8 @@ def process_paperwork(state: GameState) -> GameState:
     # 2. Tick event durations (remove expired, keep permanent)
     state = tick_events(state)
 
-    # 3. Activate incoming extra staff (called last round, now available)
+    # 3. Activate incoming extra staff (called last round, now available for next round)
+    # These will be charged starting in the next round's paperwork calculation
     for dept in state.departments.values():
         if dept.staff.extra_incoming > 0:
             dept.staff.extra_total += dept.staff.extra_incoming

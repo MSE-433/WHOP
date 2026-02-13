@@ -51,6 +51,8 @@ def calculate_department_cost(dept: DepartmentState, c: CostConstants | None = N
             details[f"{dept.id.value}_requests_waiting_qual"] = q
 
     # Extra staff cost (all departments)
+    # Only charge for extra staff that are actually on duty
+    # (extra_incoming haven't arrived yet, so don't charge for them this round)
     extra_on_duty = dept.staff.extra_total
     if extra_on_duty > 0:
         f = extra_on_duty * c.extra_staff_financial
